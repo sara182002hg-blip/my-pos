@@ -9,7 +9,7 @@ API_URL = "https://script.google.com/macros/s/AKfycbxwm0SVcvcm327H-zdEIa7RCM6I5H
 
 # 2. ลิงก์ดึงข้อมูลสินค้าจากชีตใหม่ (หน้า Products)
 # ใช้ ID: 1A18StFwB8KLcFUaeUSF48TZxbKSepM-MNX4suPPrFhg
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1A18StFwB8KLcFUaeUSF48TZxbKSepM-MNX4suPPrFhg/export?format=csv&gid=540097780"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1A18StFwB8KLcFUaeUSF48TZxbKSepM-MNX4suPPrFhg/edit?usp=sharing"
 
 st.set_page_config(page_title="POS TAS System", layout="wide")
 
@@ -56,3 +56,4 @@ with col2:
         st.table(df_cart)
         total = df_cart['Price'].sum()
         st.write
+
