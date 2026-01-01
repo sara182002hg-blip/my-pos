@@ -8,12 +8,10 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0El
 
 st.set_page_config(page_title="TAS PROFESSIONAL POS", layout="wide")
 
-# 2. CSS ขั้นสูง: บังคับทุกกล่องให้สูงเท่ากันเป๊ะ
+# 2. CSS เดิมที่สวยอยู่แล้ว ล็อกขนาดรูปและตัวหนังสือขาว
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
-    
-    /* กล่องสินค้าครอบทั้งหมด */
     .product-card {
         background-color: #1a1c24;
         border-radius: 15px;
@@ -23,54 +21,21 @@ st.markdown("""
         display: flex;
         flex-direction: column;
         align-items: center;
-        height: 320px; /* บังคับความสูงกล่องรวม */
+        height: 320px;
     }
-
-    /* กล่องรูปภาพ: หัวใจสำคัญที่ทำให้เท่ากัน */
     .img-box {
-        width: 100%;
-        height: 160px; /* ล็อกความสูงรูปภาพ */
-        background-color: white;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        margin-bottom: 10px;
+        width: 100%; height: 160px;
+        background-color: white; border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        overflow: hidden; margin-bottom: 10px;
     }
-
-    .img-box img {
-        max-width: 95%;
-        max-height: 95%;
-        object-fit: contain; /* รูปไม่เบี้ยวแน่นอน */
-    }
-
-    .p-name {
-        color: white !important;
-        font-weight: bold;
-        font-size: 1.1em;
-        text-align: center;
-        height: 2.5em; /* ล็อกความสูงชื่อ 2 บรรทัด */
-        overflow: hidden;
-        margin-top: 5px;
-    }
-
-    .p-price {
-        color: #f1c40f !important;
-        font-weight: bold;
-        font-size: 1.2em;
-        margin-bottom: 10px;
-    }
-
-    /* ปรับปุ่มเลือกให้ติดขอบล่าง */
-    .stButton > button {
-        width: 100%;
-        border-radius: 8px;
-        background-color: #28a745;
-        color: white;
-    }
-    
-    h1, h2, h3, p, span, label { color: white !important; }
+    .img-box img { max-width: 95%; max-height: 95%; object-fit: contain; }
+    .p-name { color: white !important; font-weight: bold; text-align: center; height: 2.5em; overflow: hidden; margin-top: 5px; }
+    .p-price { color: #f1c40f !important; font-weight: bold; font-size: 1.2em; margin-bottom: 10px; }
+    .stButton > button { width: 100%; border-radius: 8px; font-weight: bold; }
+    p, span, label, h1, h2, h3, div { color: white !important; }
+    /* สไตล์ปุ่มลบเล็กๆ ในตะกร้า */
+    .btn-remove { background-color: #ff4b4b !important; color: white !important; padding: 2px 5px !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -82,33 +47,42 @@ def load_products():
         return df
     except: return pd.DataFrame()
 
-if 'cart' not in st.session_state: st.session_state.cart = []
+# เตรียม Session State
+if 'cart' not in st.session_state: st.session_state.cart = {} # เปลี่ยนเป็น dict เพื่อเก็บจำนวน
 if 'last_bill' not in st.session_state: st.session_state.last_bill = None
+
+# ฟังก์ชันจัดการตะกร้า
+def add_to_cart(name, price):
+    if name in st.session_state.cart:
+        st.session_state.cart[name]['qty'] += 1
+    else:
+        st.session_state.cart[name] = {'price': price, 'qty': 1}
+
+def remove_one(name):
+    if name in st.session_state.cart:
+        st.session_state.cart[name]['qty'] -= 1
+        if st.session_state.cart[name]['qty'] <= 0:
+            del st.session_state.cart[name]
 
 st.title("🏪 TAS PROFESSIONAL POS")
 
 df_products = load_products()
-col1, col2 = st.columns([3.5, 1.2])
+col1, col2 = st.columns([3.5, 1.3])
 
 with col1:
     if not df_products.empty:
         grid = st.columns(4)
         for i, row in df_products.iterrows():
             with grid[i % 4]:
-                # ใช้ HTML สร้างโครงสร้าง Card ทั้งหมดยกเว้นปุ่ม
                 st.markdown(f"""
                     <div class="product-card">
-                        <div class="img-box">
-                            <img src="{row['Image_URL']}">
-                        </div>
+                        <div class="img-box"><img src="{row['Image_URL']}"></div>
                         <div class="p-name">{row['Name']}</div>
                         <div class="p-price">{row['Price']:,} ฿</div>
                     </div>
                 """, unsafe_allow_html=True)
-                
-                # วางปุ่มแยกออกมาแต่อยู่ใต้ Card พอดี
-                if st.button(f"เลือก {row['Name']}", key=f"btn_{i}"):
-                    st.session_state.cart.append({"Name": row['Name'], "Price": row['Price']})
+                if st.button(f"➕ เลือก", key=f"btn_{i}"):
+                    add_to_cart(row['Name'], row['Price'])
                     st.rerun()
     else:
         st.info("กำลังโหลดสินค้า...")
@@ -116,28 +90,39 @@ with col1:
 with col2:
     st.subheader("🛒 รายการสินค้า")
     if st.session_state.cart:
-        df_cart = pd.DataFrame(st.session_state.cart)
-        for idx, item in df_cart.iterrows():
-            st.write(f"⬜ {item['Name']} : {item['Price']:,} ฿")
+        total = 0
+        items_list = []
         
-        total = sum(item['Price'] for item in st.session_state.cart)
-        st.divider()
+        for name, info in list(st.session_state.cart.items()):
+            item_total = info['price'] * info['qty']
+            total += item_total
+            items_list.append(f"{name} x{info['qty']}")
+            
+            c_name, c_qty = st.columns([2, 1])
+            with c_name:
+                st.write(f"**{name}**\n({info['price']:,} ฿)")
+            with c_qty:
+                if st.button("❌", key=f"del_{name}"):
+                    remove_one(name)
+                    st.rerun()
+                st.write(f"จำนวน: {info['qty']}")
+            st.divider()
+        
         st.markdown(f"## ยอดรวม: :green[{total:,.2f}] บาท")
         method = st.radio("วิธีชำระเงิน:", ("เงินสด", "โอนเงิน"), horizontal=True)
         
         if st.button("💰 ยืนยันชำระเงิน", type="primary", use_container_width=True):
             bill_id = "B" + pd.Timestamp.now().strftime("%y%m%d%H%M%S")
-            items_str = ", ".join(df_cart['Name'].tolist())
-            final_url = f"{API_URL}?bill_id={bill_id}&items={items_str}&total={total}&payment_type={method}"
+            final_url = f"{API_URL}?bill_id={bill_id}&items={', '.join(items_list)}&total={total}&payment_type={method}"
             try:
                 requests.get(final_url, timeout=0.001)
             except: pass 
             st.session_state.last_bill = {"total": total, "type": method}
-            st.session_state.cart = []
+            st.session_state.cart = {}
             st.rerun()
 
-        if st.button("🗑️ ล้างตะกร้า"):
-            st.session_state.cart = []
+        if st.button("🗑️ ล้างตะกร้าทั้งหมด", use_container_width=True):
+            st.session_state.cart = {}
             st.rerun()
     else:
         if st.session_state.last_bill:
@@ -145,8 +130,8 @@ with col2:
             st.success(f"บันทึกสำเร็จ! ยอด {last['total']:,} ฿")
             if "โอน" in last['type']:
                 st.image(f"https://promptpay.io/0945016189/{last['total']}.png")
-            if st.button("รับลูกค้าคนถัดไป"):
+            if st.button("รับลูกค้าคนใหม่"):
                 st.session_state.last_bill = None
                 st.rerun()
         else:
-            st.write("กรุณาเลือกสินค้า")
+            st.write("กรุณาเลือกสินค้าด้านซ้าย")
