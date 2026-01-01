@@ -2,23 +2,23 @@ import streamlit as st
 import pandas as pd
 import time
 
-# 1. ข้อมูลการเชื่อมต่อ (ใช้ลิงก์ Export ตรงจากชีต Stock)
+# 1. ข้อมูลการเชื่อมต่อ (ลิงก์ตรงจากชีต Stock)
 FILE_ID = "1XqL_8rB3vUa6I6N6_uLz7G_7fPjG0r_D-uB4fP5Y6X0"
 GID = "228640428"
 SHEET_URL = f"https://docs.google.com/spreadsheets/d/{FILE_ID}/export?format=csv&gid={GID}"
 
 st.set_page_config(page_title="TAS POS SYSTEM", layout="wide")
 
-# 2. ฟังก์ชันโหลดข้อมูลสต็อก (มีระบบล้าง Cache ในตัว)
+# 2. ฟังก์ชันโหลดข้อมูลสต็อก
 @st.cache_data(ttl=5)
 def load_stock_data():
     try:
-        # ใส่ตัวแปรเวลาเพื่อบังคับให้ดึงค่าใหม่ตลอด
+        # บังคับดึงค่าใหม่ตลอดเพื่อแก้ปัญหาเลข 0
         fresh_url = f"{SHEET_URL}&t={int(time.time())}"
         df = pd.read_csv(fresh_url)
         df.columns = df.columns.str.strip()
         
-        # ป้องกันคอลัมน์หาย
+        # ป้องกันกรณี Google ส่งข้อมูลมาไม่ครบ
         for col in ['Name', 'Price', 'Stock', 'Image_URL']:
             if col not in df.columns:
                 df[col] = 0 if col != 'Name' and col != 'Image_URL' else ""
@@ -29,14 +29,15 @@ def load_stock_data():
     except:
         return pd.DataFrame()
 
-# 3. ตั้งค่าระบบ
+# 3. ตั้งค่าตัวแปรเริ่มต้น
 if 'pos_cart' not in st.session_state: st.session_state.pos_cart = {}
 if 'pos_history' not in st.session_state: st.session_state.pos_history = []
 if 'last_bill' not in st.session_state: st.session_state.last_bill = None
 
+# ดึงข้อมูลจาก Google Sheets
 df_stock = load_stock_data()
 
-# 4. เมนู
+# 4. เมนูด้านข้าง
 st.sidebar.title("📦 ระบบจัดการ")
 menu = st.sidebar.radio("เลือกเมนู", ["🛒 หน้าขาย (POS)", "📊 รายงานสต็อก"])
 
@@ -122,6 +123,3 @@ else:
             },
             use_container_width=True, hide_index=True
         )
-        st.divider()
-        st.subheader("📝 ประวัติการขายวันนี้")
-        if st.session_state.pos
