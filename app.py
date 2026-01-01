@@ -60,6 +60,9 @@ with col2:
                     import io
                     img_buf = io.BytesIO()
                     qr.save(img_buf, kind='png', scale=5)
+                   import io
+                    img_buf = io.BytesIO()
+                    qr.save(img_buf, kind='png', scale=5)
                     st.image(img_buf.getvalue(), caption="สแกนจ่ายตรงนี้")
                     st.session_state.cart = [] # ล้างตะกร้า
                 else:
@@ -72,4 +75,5 @@ with col2:
             st.rerun()
     else:
         st.write("ยังไม่มีสินค้าในตะกร้า")
+
 
