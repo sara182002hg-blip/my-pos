@@ -8,7 +8,8 @@ if 'inventory' not in st.session_state:
     st.session_state.inventory = pd.DataFrame([
         {"รายการ": "กาแฟดำ", "ราคา": 50},
         {"รายการ": "ชาเขียว", "ราคา": 55},
-        {"รายการ": "ขนมปัง", "ราคา": 25}
+        {"รายการ": "ขนมปัง", "ราคา": 25},
+        {"รายการ": "นมสด", "ราคา": 25}
     ])
 
 if 'cart' not in st.session_state:
@@ -37,3 +38,4 @@ with col2:
             st.rerun()
     else:
         st.write("ยังไม่มีสินค้าในตะกร้า")
+
