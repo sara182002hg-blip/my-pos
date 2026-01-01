@@ -4,7 +4,7 @@ import requests
 import segno
 
 # 1. ใส่ URL ที่ก๊อปปี้มาจาก Apps Script (รูปที่ 21) ตรงนี้
-API_URL = "https://script.google.com/macros/s/AKfycbwkMzLiNpkRvMucLdQYapDJJyXNR6eVTTGqDoNC3lrH-dDJqTFZrcJLKQPCsDFa8qSU/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbxwm0SVcvcm327H-zdEIa7RCM6I5HwWst9UtXqRU_gvoiBXeZkVrxczLUDIFHVvrw_z/exec"
 
 st.set_page_config(page_title="My POS with Images", layout="wide")
 
@@ -56,15 +56,12 @@ with col2:
                 if res.status_code == 200:
                     st.success("บันทึกยอดขายลง Google Sheets สำเร็จ!")
                     # สร้าง QR Code (จำลอง)
-                    qr = segno.make_qr(f"https://promptpay.io/0812345678/{total}")
-                    import io
-                    img_buf = io.BytesIO()
-                    qr.save(img_buf, kind='png', scale=5)
-                   import io
-                    img_buf = io.BytesIO()
-                    qr.save(img_buf, kind='png', scale=5)
-                    st.image(img_buf.getvalue(), caption="สแกนจ่ายตรงนี้")
-                    st.session_state.cart = [] # ล้างตะกร้า
+                qr = segno.make_qr(f"https://promptpay.io/0812345678/{total}")
+                import io
+                img_buf = io.BytesIO()
+                qr.save(img_buf, kind='png', scale=5)
+                st.image(img_buf.getvalue(), caption="สแกนจ่ายตรงนี้")
+                st.session_state.cart = [] # ล้างตะกร้า
                 else:
                     st.error(f"การเชื่อมต่อมีปัญหา (Code: {res.status_code})")
             except Exception as e:
@@ -75,6 +72,7 @@ with col2:
             st.rerun()
     else:
         st.write("ยังไม่มีสินค้าในตะกร้า")
+
 
 
 
