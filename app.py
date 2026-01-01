@@ -4,16 +4,16 @@ import requests
 import json
 import time
 
-# --- ตั้งค่าการเชื่อมต่อ (ใช้ URL ที่คุณส่งมา) ---
+# --- 1. ตั้งค่าการเชื่อมต่อ (เช็ค URL ให้ถูกต้อง) ---
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzPnRauhL9eU7nw8ZbowGKK8wW2D1vMpJEqr1oC8uBubN0MS2e3IfO8L4TvCR4-65Ns/exec"
 STOCK_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=228640428&single=true&output=csv"
 
 st.set_page_config(page_title="TAS POS SYSTEM", layout="wide")
 
-# ฟังก์ชันดึงข้อมูลสต็อก
+# --- 2. ฟังก์ชันโหลดข้อมูล (ปรับให้เบาลง) ---
 def load_data():
     try:
-        # ใส่ timestamp ป้องกันการจำค่าเก่า (Cache)
+        # ใส่ t= เพื่อป้องกันเครื่องจำค่าเก่า
         df = pd.read_csv(f"{STOCK_URL}&t={int(time.time())}")
         df.columns = df.columns.str.strip()
         df['Price'] = pd.to_numeric(df['Price'], errors='coerce').fillna(0)
@@ -29,14 +29,34 @@ if 'order_success' not in st.session_state: st.session_state.order_success = Non
 
 df = load_data()
 
-# เมนู Sidebar
+# --- 3. ฟังก์ชันส่งข้อมูลไป Google Sheets (ตัวที่ปรับปรุงใหม่) ---
+def process_payment(method, items_summary, total):
+    payload = {
+        "bill_id": f"BILL-{int(time.time())}",
+        "items": ", ".join(items_summary),
+        "total": total,
+        "cart": st.session_state.cart,
+        "method": method
+    }
+    
+    with st.spinner('กำลังบันทึกและตัดสต็อก...'):
+        try:
+            # เพิ่ม timeout เป็น 30 วินาที ป้องกัน Error สีแดงจากการรอนาน
+            response = requests.post(SCRIPT_URL, data=json.dumps(payload), timeout=30)
+            if response.status_code == 200:
+                st.session_state.order_success = f"{method} {total:,} ฿"
+                st.session_state.cart = {}
+                st.session_state.show_qr = False
+                st.rerun()
+            else:
+                st.error("เซิร์ฟเวอร์ Google ไม่ตอบกลับ กรุณาลองใหม่")
+        except Exception as e:
+            st.error(f"การเชื่อมต่อล่าช้า: {e}")
+
+# --- 4. ส่วนหน้าจอ (UI) ---
 st.sidebar.title("⚙️ TAS POS MENU")
 page = st.sidebar.radio("เลือกหน้าจอ", ["🛒 หน้าขายสินค้า", "📊 หลังบ้าน/สรุปรายได้"])
 
-if st.sidebar.button("🔄 อัปเดตสต็อก"):
-    st.rerun()
-
-# --- หน้าขายสินค้า ---
 if page == "🛒 หน้าขายสินค้า":
     st.title("🏪 TAS POS SYSTEM")
     col1, col2 = st.columns([3, 2])
@@ -61,8 +81,7 @@ if page == "🛒 หน้าขายสินค้า":
                             st.session_state.cart[n] = st.session_state.cart.get(n, {'price': row['Price'], 'qty': 0})
                             st.session_state.cart[n]['qty'] += 1
                             st.rerun()
-                    else:
-                        st.button("หมด", key=f"no_{i}", disabled=True, use_container_width=True)
+                    else: st.button("หมด", key=f"no_{i}", disabled=True, use_container_width=True)
 
     with col2:
         st.subheader("🛒 ตะกร้าสินค้า")
@@ -73,40 +92,25 @@ if page == "🛒 หน้าขายสินค้า":
                 sub = item['price'] * item['qty']
                 total += sub
                 items_summary.append(f"{name}({item['qty']})")
-                c1, c2, c3 = st.columns([2, 2, 1])
+                c1, c2, c3 = st.columns([2, 1.5, 0.5])
                 c1.write(f"**{name}**\n({item['qty']} ชิ้น)")
-                c2.write(f"{sub:,} ฿")
-                if c3.button("❌", key=f"del_{name}"):
+                if c2.button("➕", key=f"p_{name}"):
+                    st.session_state.cart[name]['qty'] += 1
+                    st.rerun()
+                if c2.button("➖", key=f"m_{name}"):
+                    if st.session_state.cart[name]['qty'] > 1: st.session_state.cart[name]['qty'] -= 1
+                    else: del st.session_state.cart[name]
+                    st.rerun()
+                if c3.button("❌", key=f"d_{name}"):
                     del st.session_state.cart[name]
                     st.rerun()
             
             st.divider()
             st.markdown(f"## ยอดรวม: :orange[{total:,}] ฿")
             
-            # ปุ่มชำระเงิน
             c_pay1, c_pay2 = st.columns(2)
-            
-            def process_payment(method):
-                payload = {
-                    "bill_id": f"BILL-{int(time.time())}",
-                    "items": ", ".join(items_summary),
-                    "total": total,
-                    "cart": st.session_state.cart,
-                    "method": method
-                }
-                try:
-                    response = requests.post(SCRIPT_URL, data=json.dumps(payload))
-                    if response.text == "Success":
-                        st.session_state.order_success = f"{method} {total:,} ฿"
-                        st.session_state.cart = {}
-                        st.session_state.show_qr = False
-                        st.rerun()
-                except:
-                    st.error("เกิดข้อผิดพลาดในการเชื่อมต่อกับ Google Sheets")
-
             if c_pay1.button("💵 เงินสด", use_container_width=True, type="primary"):
-                process_payment("เงินสด")
-                
+                process_payment("เงินสด", items_summary, total)
             if c_pay2.button("📱 QR Code", use_container_width=True, type="primary"):
                 st.session_state.show_qr = True
 
@@ -116,23 +120,18 @@ if page == "🛒 หน้าขายสินค้า":
 
             if st.session_state.show_qr:
                 st.markdown("---")
-                st.subheader("📸 สแกนชำระเงิน")
                 qr_api = f"https://promptpay.io/0945016189/{total}.png"
-                st.image(qr_api, caption=f"พร้อมเพย์: 0945016189 | ยอด: {total} ฿", width=250)
-                if st.button("✅ ยืนยันว่าชำระเงินแล้ว"):
-                    process_payment("QR Code")
+                st.image(qr_api, caption=f"สแกนจ่าย {total} ฿", width=250)
+                if st.button("✅ ยืนยันว่าลูกค้าโอนเงินแล้ว"):
+                    process_payment("QR Code", items_summary, total)
 
         elif st.session_state.order_success:
-            st.success(f"🎉 บันทึกการขายและตัดสต็อกสำเร็จ: {st.session_state.order_success}")
+            st.success(f"🎉 สำเร็จ: {st.session_state.order_success}")
             if st.button("เริ่มบิลใหม่"):
                 st.session_state.order_success = None
                 st.rerun()
-        else:
-            st.info("กรุณาเลือกสินค้า")
+        else: st.info("เลือกสินค้าได้เลยครับ")
 
-# --- หน้าหลังบ้าน ---
 else:
-    st.title("📊 รายงานหลังบ้าน")
-    st.write("ตรวจสอบสต็อกสินค้าปัจจุบัน")
+    st.title("📊 รายงานสต็อกล่าสุด")
     st.dataframe(df[['Name', 'Price', 'Stock']], use_container_width=True, hide_index=True)
-    st.info("หมายเหตุ: รายการยอดขายต่อวันสามารถดูได้โดยตรงใน Google Sheets หน้า 'Sales'")
