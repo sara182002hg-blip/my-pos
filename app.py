@@ -3,7 +3,8 @@ import pandas as pd
 import requests
 
 # 1. ข้อมูลการเชื่อมต่อ
-SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=228640428&single=true&output=csv"
+# ลิงก์นี้จะบังคับให้ดึงข้อมูลจากไฟล์ Export โดยตรง ไม่ผ่านระบบ Publish ปกติ
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1XqL_8rB3vUa6I6N6_uLz7G_7fPjG0r_D-uB4fP5Y6X0/export?format=csv&gid=228640428"
 
 st.set_page_config(page_title="TAS POS PROFESSIONAL", layout="wide")
 
@@ -145,5 +146,6 @@ else:
         )
     else:
         st.warning("ไม่สามารถโหลดสต็อกได้")
+
 
 
