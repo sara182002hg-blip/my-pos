@@ -8,7 +8,7 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0El
 
 st.set_page_config(page_title="TAS PROFESSIONAL POS", layout="wide")
 
-# CSS จัดการหน้าจอให้สวยและตัวหนังสือขาวชัดเจน
+# CSS บังคับตัวหนังสือขาวและรูปภาพสวยงาม
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
@@ -60,25 +60,21 @@ with col2:
         method = st.radio("วิธีชำระเงิน:", ("เงินสด", "โอนเงิน"), horizontal=True)
         
         if st.button("💰 ยืนยันชำระเงิน", type="primary", use_container_width=True):
-            # เตรียมข้อมูล
+            # 1. เตรียมข้อมูลบิล
             bill_id = "B" + pd.Timestamp.now().strftime("%y%m%d%H%M%S")
             items_str = ", ".join(df_cart['Name'].tolist())
             
-            # --- เปลี่ยนวิธีส่งจาก JSON POST เป็น URL Parameters (GET) ---
-            params = {
-                "bill_id": bill_id,
-                "items": items_str,
-                "total": float(total),
-                "payment_type": method
-            }
+            # 2. ใช้เทคนิค "ยิงแล้ววิ่ง" (Fire and Forget) แบบไม่รอ Error
+            # สร้าง URL สำหรับส่งข้อมูล
+            final_url = f"{API_URL}?bill_id={bill_id}&items={items_str}&total={total}&payment_type={method}"
             
-            # ยิงข้อมูลออกไปทันทีแบบไม่ต้องรอผล (Fire and Forget)
+            # ส่งข้อมูลผ่านเบื้องหลังแบบเร็วที่สุด
             try:
-                requests.get(API_URL, params=params, timeout=0.5)
+                requests.get(final_url, timeout=0.001) # ให้มัน timeout ทันทีหลังยิงออกไป
             except:
-                pass
+                pass 
             
-            # เปลี่ยนหน้าจอทันที ไม่ต้องรอลุ้น
+            # 3. อัปเดตหน้าจอทันที ไม่ต้องรอลุ้นคำตอบ
             st.session_state.last_bill = {"total": total, "type": method}
             st.session_state.cart = []
             st.rerun()
@@ -89,7 +85,7 @@ with col2:
     else:
         if st.session_state.last_bill:
             last = st.session_state.last_bill
-            st.success(f"บันทึกสำเร็จ! ยอดรวม {last['total']:,} ฿")
+            st.success(f"บันทึกยอด {last['total']:,} ฿ สำเร็จ!")
             if "โอน" in last['type']:
                 st.image(f"https://promptpay.io/0945016189/{last['total']}.png")
             if st.button("รับลูกค้าคนใหม่"):
