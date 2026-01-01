@@ -8,11 +8,11 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0El
 
 st.set_page_config(page_title="TAS PROFESSIONAL POS", layout="wide")
 
-# CSS บังคับตัวหนังสือขาวและรูปภาพสวยงาม
+# CSS จัดการหน้าจอให้สวยและตัวหนังสือขาวชัดเจน
 st.markdown("""
     <style>
-    .main { background-color: #0e1117; color: white; }
-    .product-title { color: #ffffff !important; font-weight: bold; text-align: center; }
+    .main { background-color: #0e1117; }
+    .product-title { color: #ffffff !important; font-weight: bold; text-align: center; font-size: 1.1em; }
     .product-price { color: #f1c40f !important; font-weight: bold; text-align: center; }
     .stButton>button { width: 100%; border-radius: 10px; height: 3.5em; font-weight: bold; }
     p, span, label, h1, h2, h3, div { color: white !important; }
@@ -60,26 +60,27 @@ with col2:
         method = st.radio("วิธีชำระเงิน:", ("เงินสด", "โอนเงิน"), horizontal=True)
         
         if st.button("💰 ยืนยันชำระเงิน", type="primary", use_container_width=True):
-            bill_data = {
-                "bill_id": "B"+pd.Timestamp.now().strftime("%y%m%d%H%M%S"),
-                "items": ", ".join(df_cart['Name'].tolist()),
+            # เตรียมข้อมูล
+            bill_id = "B" + pd.Timestamp.now().strftime("%y%m%d%H%M%S")
+            items_str = ", ".join(df_cart['Name'].tolist())
+            
+            # --- เปลี่ยนวิธีส่งจาก JSON POST เป็น URL Parameters (GET) ---
+            params = {
+                "bill_id": bill_id,
+                "items": items_str,
                 "total": float(total),
                 "payment_type": method
             }
             
-            # --- เทคนิคใหม่: ส่งข้อมูลแล้วไปหน้าสำเร็จทันที ---
+            # ยิงข้อมูลออกไปทันทีแบบไม่ต้องรอผล (Fire and Forget)
             try:
-                # ตั้ง timeout สั้นมาก (0.1 วินาที) เพื่อให้ส่งออกไปแล้วข้ามเลย ไม่รอ Google ตอบกลับ
-                requests.post(API_URL, json=bill_data, timeout=0.1)
-            except requests.exceptions.Timeout:
-                # มันจะ Timeout แน่นอนเพราะเราตั้งไว้สั้นมาก แต่ข้อมูลได้ถูกส่งออกไปแล้ว
-                pass 
-            except Exception:
+                requests.get(API_URL, params=params, timeout=0.5)
+            except:
                 pass
             
-            # บันทึกสถานะเพื่อโชว์หน้าสำเร็จ
+            # เปลี่ยนหน้าจอทันที ไม่ต้องรอลุ้น
             st.session_state.last_bill = {"total": total, "type": method}
-            st.session_state.cart = [] # ล้างตะกร้า
+            st.session_state.cart = []
             st.rerun()
 
         if st.button("🗑️ ล้างตะกร้า"):
@@ -88,11 +89,11 @@ with col2:
     else:
         if st.session_state.last_bill:
             last = st.session_state.last_bill
-            st.success(f"บันทึกยอด {last['total']:,} ฿ สำเร็จ!")
+            st.success(f"บันทึกสำเร็จ! ยอดรวม {last['total']:,} ฿")
             if "โอน" in last['type']:
-                st.image(f"https://promptpay.io/0945016189/{last['total']}.png", caption="สแกนเพื่อจ่ายเงิน")
-            if st.button("เริ่มบิลถัดไป"):
+                st.image(f"https://promptpay.io/0945016189/{last['total']}.png")
+            if st.button("รับลูกค้าคนใหม่"):
                 st.session_state.last_bill = None
                 st.rerun()
         else:
-            st.write("ยังไม่มีสินค้า")
+            st.write("กรุณาเลือกสินค้า")
