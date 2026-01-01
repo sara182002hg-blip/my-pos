@@ -8,54 +8,66 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0El
 
 st.set_page_config(page_title="TAS PROFESSIONAL POS", layout="wide")
 
-# 2. CSS ขั้นสูง: ล็อกขนาดรูปให้เท่ากันเป๊ะ
+# 2. CSS สูตรลับ: บังคับ Grid และ รูปภาพให้เท่ากัน 100%
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
     
-    /* กรอบรูปภาพ: บังคับความสูงและสัดส่วน */
-    .img-container {
+    /* สร้างกล่องสินค้าสีเข้ม */
+    .product-container {
+        background-color: #1a1c24;
+        padding: 10px;
+        border-radius: 15px;
+        border: 1px solid #333;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+
+    /* กล่องสีขาวล็อกขนาดรูปภาพ (สำคัญมาก) */
+    .img-frame {
         width: 100%;
-        height: 200px; /* ล็อกความสูงไว้ที่ 200px เท่ากันทุกรูป */
-        background-color: #ffffff; /* พื้นหลังขาวในกรอบรูปเพื่อให้สินค้าดูเด่น */
+        height: 180px; /* ล็อกความสูงเท่ากันทุกใบ */
+        background-color: white; /* พื้นหลังสีขาวช่วยให้รูปเด่นและดูเท่ากัน */
         border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
         overflow: hidden;
-        margin-bottom: 10px;
-    }
-    
-    .img-container img {
-        max-width: 100%;
-        max-height: 100%;
-        object-fit: contain; /* โชว์รูปเต็มสัดส่วน ไม่ให้รูปบิดเบี้ยว */
+        margin-bottom: 12px;
     }
 
-    .product-title { 
-        color: #ffffff !important; 
-        font-weight: bold; 
-        text-align: center; 
-        font-size: 1.1em;
-        height: 2.5em; /* ล็อกความสูงชื่อสินค้า 2 บรรทัด */
-        overflow: hidden;
+    .img-frame img {
+        max-width: 90%;
+        max-height: 90%;
+        object-fit: contain; /* ป้องกันรูปบิดเบี้ยว */
     }
-    
-    .product-price { 
-        color: #f1c40f !important; 
-        font-weight: bold; 
-        text-align: center; 
+
+    .product-name {
+        color: white !important;
+        font-weight: bold;
+        height: 2.5em; /* ล็อกไว้ 2 บรรทัด */
+        overflow: hidden;
+        margin-bottom: 5px;
+        font-size: 1.05em;
+    }
+
+    .product-price {
+        color: #f1c40f !important;
+        font-weight: bold;
+        font-size: 1.2em;
         margin-bottom: 10px;
     }
-    
-    .stButton>button { 
-        width: 100%; 
-        border-radius: 10px; 
-        height: 3em; 
-        font-weight: bold; 
+
+    .stButton>button {
+        width: 100%;
+        background-color: #28a745;
+        color: white;
+        border-radius: 10px;
+        font-weight: bold;
     }
     
-    p, span, label, h1, h2, h3, div { color: white !important; }
+    /* ปรับแต่งตัวหนังสือส่วนอื่นๆ */
+    h1, h2, h3, p, span, label, .stMarkdown { color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -73,23 +85,25 @@ if 'last_bill' not in st.session_state: st.session_state.last_bill = None
 st.title("🏪 TAS PROFESSIONAL POS")
 
 df_products = load_products()
-col1, col2 = st.columns([3, 1.2])
+col1, col2 = st.columns([3.2, 1.2])
 
 with col1:
     if not df_products.empty:
         grid = st.columns(4)
         for i, row in df_products.iterrows():
             with grid[i % 4]:
-                # แสดงรูปในกรอบที่ล็อกขนาดไว้
+                # แสดงผลด้วย HTML เพื่อการควบคุมที่แม่นยำ
                 st.markdown(f"""
-                    <div class="img-container">
-                        <img src="{row['Image_URL']}">
+                    <div class="product-container">
+                        <div class="img-frame">
+                            <img src="{row['Image_URL']}">
+                        </div>
+                        <div class="product-name">{row['Name']}</div>
+                        <div class="product-price">{row['Price']:,} ฿</div>
                     </div>
                 """, unsafe_allow_html=True)
                 
-                st.markdown(f'<div class="product-title">{row["Name"]}</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="product-price">{row["Price"]:,} ฿</div>', unsafe_allow_html=True)
-                
+                # ปุ่มกดวางต่อท้าย container
                 if st.button(f"เลือก {row['Name']}", key=f"btn_{i}"):
                     st.session_state.cart.append({"Name": row['Name'], "Price": row['Price']})
                     st.rerun()
@@ -97,11 +111,11 @@ with col1:
         st.info("กำลังโหลดสินค้า...")
 
 with col2:
-    st.subheader("🛒 รายการสินค้า")
+    st.subheader("🛒 ตะกร้าสินค้า")
     if st.session_state.cart:
         df_cart = pd.DataFrame(st.session_state.cart)
         for idx, item in df_cart.iterrows():
-            st.write(f"◽ {item['Name']} : {item['Price']:,} ฿")
+            st.write(f"⬜ {item['Name']} : {item['Price']:,} ฿")
         
         total = sum(item['Price'] for item in st.session_state.cart)
         st.divider()
@@ -115,8 +129,7 @@ with col2:
             
             try:
                 requests.get(final_url, timeout=0.001)
-            except:
-                pass 
+            except: pass 
             
             st.session_state.last_bill = {"total": total, "type": method}
             st.session_state.cart = []
@@ -135,4 +148,4 @@ with col2:
                 st.session_state.last_bill = None
                 st.rerun()
         else:
-            st.write("กรุณาเลือกสินค้า")
+            st.write("เลือกสินค้าเพื่อเพิ่มลงตะกร้า")
