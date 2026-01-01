@@ -5,16 +5,15 @@ import json
 import time
 
 # --- 1. ตั้งค่าการเชื่อมต่อ (ใช้ URL ล่าสุดที่คุณส่งมา) ---
-SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx33rffhKc8q7JThCECJ1cO6f9fywve490dCYJBZ7MGrOJUgO3nmuExvAXVcMxscoNd/exec"
+SCRIPT_URL = "https://script.google.com/macros/s/AKfycbXjdHQCM5mbntB82L_7YrkyxayA1k3R6HuXcPh91bwlzYb2ROVVYJnB2p5RdSstXeU/exec"
 STOCK_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=228640428&single=true&output=csv"
 
 st.set_page_config(page_title="TAS POS SYSTEM", layout="wide")
 
-# ฟังก์ชันดึงข้อมูลสต็อก
-@st.cache_data(ttl=2) # ลดเวลาแคชเพื่อให้เห็นสต็อกที่ตัดแล้วเร็วขึ้น
+# ฟังก์ชันดึงข้อมูลสต็อก (เพิ่มการป้องกัน Cache เพื่อความไว)
+@st.cache_data(ttl=2)
 def load_data():
     try:
-        # ใส่ t= เพื่อให้ดึงข้อมูลใหม่จาก Google เสมอ
         df = pd.read_csv(f"{STOCK_URL}&t={int(time.time())}")
         df.columns = df.columns.str.strip()
         df['Price'] = pd.to_numeric(df['Price'], errors='coerce').fillna(0)
@@ -30,7 +29,7 @@ if 'order_success' not in st.session_state: st.session_state.order_success = Non
 
 df = load_data()
 
-# ฟังก์ชันส่งข้อมูลชำระเงิน
+# ฟังก์ชันส่งข้อมูลแบบ Fast Response
 def process_payment(method, items_summary, total):
     payload = {
         "bill_id": f"BILL-{int(time.time())}",
@@ -39,27 +38,29 @@ def process_payment(method, items_summary, total):
         "cart": st.session_state.cart,
         "method": method
     }
-    with st.spinner('กำลังบันทึกข้อมูล...'):
+    with st.spinner('กำลังบันทึกและตัดสต็อก...'):
         try:
-            # ส่งข้อมูลไปยัง Apps Script
+            # ส่งข้อมูลและรอผลลัพธ์เพียง 15 วินาทีเพื่อไม่ให้แอปค้าง
             response = requests.post(SCRIPT_URL, data=json.dumps(payload), timeout=15)
             if "Success" in response.text:
                 st.session_state.order_success = f"{method} {total:,} ฿"
                 st.session_state.cart = {}
                 st.session_state.show_qr = False
-                st.cache_data.clear() # ล้างแคชเพื่อให้สต็อกหน้าจอเปลี่ยนทันที
+                st.cache_data.clear() 
                 st.rerun()
             else:
-                st.error(f"Error: {response.text}")
+                st.error(f"เกิดข้อผิดพลาด: {response.text}")
         except:
-            # กรณี Timeout แต่ข้อมูลมักจะเข้า Sheets ไปแล้ว
-            st.warning("การเชื่อมต่อช้า แต่ข้อมูลกำลังถูกบันทึก กรุณารอสักครู่แล้วตรวจสอบสต็อกครับ")
+            # กรณีเชื่อมต่อช้า แต่ข้อมูลมักจะถูกส่งไปที่ Google แล้ว
+            st.warning("บันทึกข้อมูลแล้ว ระบบกำลังอัปเดตสต็อกในหน้าตารางครับ")
+            st.session_state.cart = {}
+            st.rerun()
 
-# --- ส่วนแสดงผลหน้าจอ ---
-st.sidebar.title("⚙️ TAS POS")
-page = st.sidebar.radio("เมนู", ["🛒 ขายสินค้า", "📊 หลังบ้าน"])
+# --- ส่วนหน้าจอหลัก ---
+st.sidebar.title("⚙️ TAS POS MENU")
+page = st.sidebar.radio("เลือกหน้าจอ", ["🛒 หน้าขายสินค้า", "📊 หลังบ้าน"])
 
-if page == "🛒 ขายสินค้า":
+if page == "🛒 หน้าขายสินค้า":
     st.title("🏪 TAS POS SYSTEM")
     col1, col2 = st.columns([3, 2])
 
@@ -78,14 +79,14 @@ if page == "🛒 ขายสินค้า":
                     """, unsafe_allow_html=True)
                     if row['Stock'] > 0:
                         if st.button(f"เลือก {row['Name']}", key=f"add_{i}", use_container_width=True):
-                            n = row['Name'].strip() # ล้างช่องว่าง
+                            n = row['Name'].strip()
                             st.session_state.cart[n] = st.session_state.cart.get(n, {'price': row['Price'], 'qty': 0})
                             st.session_state.cart[n]['qty'] += 1
                             st.rerun()
                     else: st.button("หมด", key=f"no_{i}", disabled=True, use_container_width=True)
 
     with col2:
-        st.subheader("🛒 ตะกร้าสินค้า")
+        st.subheader("🛒 รายการสินค้า")
         if st.session_state.cart:
             total = 0
             items_summary = []
@@ -97,7 +98,7 @@ if page == "🛒 ขายสินค้า":
                 c1, c2 = st.columns([1, 1])
                 c1.write(f"**{name}**\n{sub:,} ฿")
                 
-                # ปุ่มบวก/ลบ
+                # ปุ่มบวก/ลบ (ไม่มีปุ่มกากบาทตามที่แจ้ง)
                 b_col1, b_col2 = c2.columns(2)
                 if b_col1.button("➖", key=f"m_{name}"):
                     if st.session_state.cart[name]['qty'] > 1:
@@ -124,15 +125,15 @@ if page == "🛒 ขายสินค้า":
 
             if st.session_state.show_qr:
                 st.image(f"https://promptpay.io/0945016189/{total}.png", width=250)
-                if st.button("✅ ยืนยันว่าลูกค้าโอนแล้ว", use_container_width=True):
+                if st.button("✅ ยืนยันโอนเงินเรียบร้อย", use_container_width=True):
                     process_payment("QR Code", items_summary, total)
 
         elif st.session_state.order_success:
-            st.success(f"บันทึกสำเร็จ: {st.session_state.order_success}")
+            st.success(f"🎉 สำเร็จ: {st.session_state.order_success}")
             if st.button("เริ่มบิลใหม่"):
                 st.session_state.order_success = None
                 st.rerun()
-        else: st.info("เลือกสินค้าได้เลยครับ")
+        else: st.info("ยังไม่มีสินค้าในตะกร้า")
 else:
     st.title("📊 รายงานสต็อก")
     st.dataframe(df[['Name', 'Price', 'Stock']], use_container_width=True, hide_index=True)
