@@ -8,13 +8,53 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0El
 
 st.set_page_config(page_title="TAS PROFESSIONAL POS", layout="wide")
 
-# CSS บังคับตัวหนังสือขาวและรูปภาพสวยงาม
+# 2. CSS ขั้นสูง: ล็อกขนาดรูปให้เท่ากันเป๊ะ
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
-    .product-title { color: #ffffff !important; font-weight: bold; text-align: center; font-size: 1.1em; }
-    .product-price { color: #f1c40f !important; font-weight: bold; text-align: center; }
-    .stButton>button { width: 100%; border-radius: 10px; height: 3.5em; font-weight: bold; }
+    
+    /* กรอบรูปภาพ: บังคับความสูงและสัดส่วน */
+    .img-container {
+        width: 100%;
+        height: 200px; /* ล็อกความสูงไว้ที่ 200px เท่ากันทุกรูป */
+        background-color: #ffffff; /* พื้นหลังขาวในกรอบรูปเพื่อให้สินค้าดูเด่น */
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        margin-bottom: 10px;
+    }
+    
+    .img-container img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain; /* โชว์รูปเต็มสัดส่วน ไม่ให้รูปบิดเบี้ยว */
+    }
+
+    .product-title { 
+        color: #ffffff !important; 
+        font-weight: bold; 
+        text-align: center; 
+        font-size: 1.1em;
+        height: 2.5em; /* ล็อกความสูงชื่อสินค้า 2 บรรทัด */
+        overflow: hidden;
+    }
+    
+    .product-price { 
+        color: #f1c40f !important; 
+        font-weight: bold; 
+        text-align: center; 
+        margin-bottom: 10px;
+    }
+    
+    .stButton>button { 
+        width: 100%; 
+        border-radius: 10px; 
+        height: 3em; 
+        font-weight: bold; 
+    }
+    
     p, span, label, h1, h2, h3, div { color: white !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -40,12 +80,21 @@ with col1:
         grid = st.columns(4)
         for i, row in df_products.iterrows():
             with grid[i % 4]:
-                st.image(row['Image_URL'], use_container_width=True)
+                # แสดงรูปในกรอบที่ล็อกขนาดไว้
+                st.markdown(f"""
+                    <div class="img-container">
+                        <img src="{row['Image_URL']}">
+                    </div>
+                """, unsafe_allow_html=True)
+                
                 st.markdown(f'<div class="product-title">{row["Name"]}</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="product-price">{row["Price"]:,} ฿</div>', unsafe_allow_html=True)
-                if st.button(f"เลือก", key=f"btn_{i}"):
+                
+                if st.button(f"เลือก {row['Name']}", key=f"btn_{i}"):
                     st.session_state.cart.append({"Name": row['Name'], "Price": row['Price']})
                     st.rerun()
+    else:
+        st.info("กำลังโหลดสินค้า...")
 
 with col2:
     st.subheader("🛒 รายการสินค้า")
@@ -60,21 +109,15 @@ with col2:
         method = st.radio("วิธีชำระเงิน:", ("เงินสด", "โอนเงิน"), horizontal=True)
         
         if st.button("💰 ยืนยันชำระเงิน", type="primary", use_container_width=True):
-            # 1. เตรียมข้อมูลบิล
             bill_id = "B" + pd.Timestamp.now().strftime("%y%m%d%H%M%S")
             items_str = ", ".join(df_cart['Name'].tolist())
-            
-            # 2. ใช้เทคนิค "ยิงแล้ววิ่ง" (Fire and Forget) แบบไม่รอ Error
-            # สร้าง URL สำหรับส่งข้อมูล
             final_url = f"{API_URL}?bill_id={bill_id}&items={items_str}&total={total}&payment_type={method}"
             
-            # ส่งข้อมูลผ่านเบื้องหลังแบบเร็วที่สุด
             try:
-                requests.get(final_url, timeout=0.001) # ให้มัน timeout ทันทีหลังยิงออกไป
+                requests.get(final_url, timeout=0.001)
             except:
                 pass 
             
-            # 3. อัปเดตหน้าจอทันที ไม่ต้องรอลุ้นคำตอบ
             st.session_state.last_bill = {"total": total, "type": method}
             st.session_state.cart = []
             st.rerun()
