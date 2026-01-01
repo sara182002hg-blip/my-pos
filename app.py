@@ -8,7 +8,6 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0El
 
 st.set_page_config(page_title="POS TAS System", layout="wide")
 
-# 2. ฟังก์ชันดึงข้อมูลสินค้า
 @st.cache_data(ttl=1)
 def load_products():
     try:
@@ -18,7 +17,6 @@ def load_products():
     except:
         return pd.DataFrame()
 
-# 3. เริ่มหน้าจอ POS
 st.title("🏪 ระบบ POS TAS (094-501-6189)")
 
 df_products = load_products()
@@ -41,7 +39,7 @@ with col1:
                     st.session_state.cart.append({"Name": name, "Price": price})
                     st.rerun()
     else:
-        st.warning("🔄 กำลังโหลดข้อมูลสินค้า... หากนานเกินไปโปรด Refresh หน้าเว็บ")
+        st.warning("🔄 กำลังโหลดข้อมูลสินค้า...")
 
 with col2:
     st.subheader("🛒 ตะกร้าสินค้า")
@@ -51,23 +49,33 @@ with col2:
         total = sum(item['Price'] for item in st.session_state.cart)
         st.write(f"## ยอดรวม: {total:,.2f} บาท")
         
-        if st.button("💰 ชำระเงิน", use_container_width=True):
-            # บันทึกยอดไป Google Sheets
+        # --- เพิ่มส่วนเลือกวิธีชำระเงิน ---
+        payment_method = st.radio("เลือกวิธีชำระเงิน:", ("เงินสด", "โอนเงิน (พร้อมเพย์)"), horizontal=True)
+        
+        if st.button("💰 ยืนยันการชำระเงิน", use_container_width=True, type="primary"):
             payload = {
                 "bill_id": "BILL-" + pd.Timestamp.now().strftime("%H%M%S"),
                 "items": ", ".join(df_cart['Name'].tolist()),
-                "total": float(total)
+                "total": float(total),
+                "payment_type": payment_method # ส่งประเภทการจ่ายเงินไปด้วย
             }
+            
             try:
                 requests.post(API_URL, json=payload)
-                st.success("✅ บันทึกยอดเรียบร้อย!")
-                # แสดง QR Code พร้อมเพย์เบอร์คุณ
-                st.image(f"https://promptpay.io/0945016189/{total}.png", caption="สแกนเพื่อจ่ายเงิน")
+                st.success(f"✅ บันทึกยอดขาย ({payment_method}) สำเร็จ!")
+                
+                # ถ้าเลือก "โอนเงิน" ให้โชว์ QR Code
+                if payment_method == "โอนเงิน (พร้อมเพย์)":
+                    st.image(f"https://promptpay.io/0945016189/{total}.png", caption=f"สแกนจ่าย {total} บาท")
+                else:
+                    st.balloons() # ถ้าจ่ายเงินสดให้ขึ้นเอฟเฟกต์ฉลอง
+                
                 st.session_state.cart = []
             except:
-                st.error("❌ บันทึกไม่สำเร็จ แต่สามารถสแกนจ่ายได้ที่นี่")
-                st.image(f"https://promptpay.io/0945016189/{total}.png")
-
+                st.error("❌ บันทึกไม่สำเร็จ")
+        
         if st.button("❌ ล้างตะกร้า"):
             st.session_state.cart = []
             st.rerun()
+    else:
+        st.info("กรุณาเลือกสินค้า")
