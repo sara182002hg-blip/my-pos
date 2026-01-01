@@ -8,66 +8,69 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0El
 
 st.set_page_config(page_title="TAS PROFESSIONAL POS", layout="wide")
 
-# 2. CSS สูตรลับ: บังคับ Grid และ รูปภาพให้เท่ากัน 100%
+# 2. CSS ขั้นสูง: บังคับทุกกล่องให้สูงเท่ากันเป๊ะ
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
     
-    /* สร้างกล่องสินค้าสีเข้ม */
-    .product-container {
+    /* กล่องสินค้าครอบทั้งหมด */
+    .product-card {
         background-color: #1a1c24;
-        padding: 10px;
         border-radius: 15px;
         border: 1px solid #333;
-        margin-bottom: 20px;
-        text-align: center;
+        padding: 10px;
+        margin-bottom: 15px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        height: 320px; /* บังคับความสูงกล่องรวม */
     }
 
-    /* กล่องสีขาวล็อกขนาดรูปภาพ (สำคัญมาก) */
-    .img-frame {
+    /* กล่องรูปภาพ: หัวใจสำคัญที่ทำให้เท่ากัน */
+    .img-box {
         width: 100%;
-        height: 180px; /* ล็อกความสูงเท่ากันทุกใบ */
-        background-color: white; /* พื้นหลังสีขาวช่วยให้รูปเด่นและดูเท่ากัน */
+        height: 160px; /* ล็อกความสูงรูปภาพ */
+        background-color: white;
         border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
         overflow: hidden;
-        margin-bottom: 12px;
+        margin-bottom: 10px;
     }
 
-    .img-frame img {
-        max-width: 90%;
-        max-height: 90%;
-        object-fit: contain; /* ป้องกันรูปบิดเบี้ยว */
+    .img-box img {
+        max-width: 95%;
+        max-height: 95%;
+        object-fit: contain; /* รูปไม่เบี้ยวแน่นอน */
     }
 
-    .product-name {
+    .p-name {
         color: white !important;
         font-weight: bold;
-        height: 2.5em; /* ล็อกไว้ 2 บรรทัด */
+        font-size: 1.1em;
+        text-align: center;
+        height: 2.5em; /* ล็อกความสูงชื่อ 2 บรรทัด */
         overflow: hidden;
-        margin-bottom: 5px;
-        font-size: 1.05em;
+        margin-top: 5px;
     }
 
-    .product-price {
+    .p-price {
         color: #f1c40f !important;
         font-weight: bold;
         font-size: 1.2em;
         margin-bottom: 10px;
     }
 
-    .stButton>button {
+    /* ปรับปุ่มเลือกให้ติดขอบล่าง */
+    .stButton > button {
         width: 100%;
+        border-radius: 8px;
         background-color: #28a745;
         color: white;
-        border-radius: 10px;
-        font-weight: bold;
     }
     
-    /* ปรับแต่งตัวหนังสือส่วนอื่นๆ */
-    h1, h2, h3, p, span, label, .stMarkdown { color: white !important; }
+    h1, h2, h3, p, span, label { color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -85,25 +88,25 @@ if 'last_bill' not in st.session_state: st.session_state.last_bill = None
 st.title("🏪 TAS PROFESSIONAL POS")
 
 df_products = load_products()
-col1, col2 = st.columns([3.2, 1.2])
+col1, col2 = st.columns([3.5, 1.2])
 
 with col1:
     if not df_products.empty:
         grid = st.columns(4)
         for i, row in df_products.iterrows():
             with grid[i % 4]:
-                # แสดงผลด้วย HTML เพื่อการควบคุมที่แม่นยำ
+                # ใช้ HTML สร้างโครงสร้าง Card ทั้งหมดยกเว้นปุ่ม
                 st.markdown(f"""
-                    <div class="product-container">
-                        <div class="img-frame">
+                    <div class="product-card">
+                        <div class="img-box">
                             <img src="{row['Image_URL']}">
                         </div>
-                        <div class="product-name">{row['Name']}</div>
-                        <div class="product-price">{row['Price']:,} ฿</div>
+                        <div class="p-name">{row['Name']}</div>
+                        <div class="p-price">{row['Price']:,} ฿</div>
                     </div>
                 """, unsafe_allow_html=True)
                 
-                # ปุ่มกดวางต่อท้าย container
+                # วางปุ่มแยกออกมาแต่อยู่ใต้ Card พอดี
                 if st.button(f"เลือก {row['Name']}", key=f"btn_{i}"):
                     st.session_state.cart.append({"Name": row['Name'], "Price": row['Price']})
                     st.rerun()
@@ -111,7 +114,7 @@ with col1:
         st.info("กำลังโหลดสินค้า...")
 
 with col2:
-    st.subheader("🛒 ตะกร้าสินค้า")
+    st.subheader("🛒 รายการสินค้า")
     if st.session_state.cart:
         df_cart = pd.DataFrame(st.session_state.cart)
         for idx, item in df_cart.iterrows():
@@ -126,11 +129,9 @@ with col2:
             bill_id = "B" + pd.Timestamp.now().strftime("%y%m%d%H%M%S")
             items_str = ", ".join(df_cart['Name'].tolist())
             final_url = f"{API_URL}?bill_id={bill_id}&items={items_str}&total={total}&payment_type={method}"
-            
             try:
                 requests.get(final_url, timeout=0.001)
             except: pass 
-            
             st.session_state.last_bill = {"total": total, "type": method}
             st.session_state.cart = []
             st.rerun()
@@ -141,11 +142,11 @@ with col2:
     else:
         if st.session_state.last_bill:
             last = st.session_state.last_bill
-            st.success(f"บันทึกยอด {last['total']:,} ฿ สำเร็จ!")
+            st.success(f"บันทึกสำเร็จ! ยอด {last['total']:,} ฿")
             if "โอน" in last['type']:
                 st.image(f"https://promptpay.io/0945016189/{last['total']}.png")
-            if st.button("รับลูกค้าคนใหม่"):
+            if st.button("รับลูกค้าคนถัดไป"):
                 st.session_state.last_bill = None
                 st.rerun()
         else:
-            st.write("เลือกสินค้าเพื่อเพิ่มลงตะกร้า")
+            st.write("กรุณาเลือกสินค้า")
