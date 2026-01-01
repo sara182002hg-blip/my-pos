@@ -8,20 +8,37 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0El
 
 st.set_page_config(page_title="TAS POS System", layout="wide")
 
-# ปรับแต่งให้ปุ่มดูเด่นและกดง่าย
+# 2. ปรับแต่ง CSS ให้ตัวหนังสือชื่อสินค้าเด่นชัด
 st.markdown("""
     <style>
+    .product-title {
+        font-size: 1.2em;
+        font-weight: bold;
+        color: #1E1E1E;
+        margin-top: 10px;
+        line-height: 1.2;
+        height: 2.4em; /* ล็อกความสูงไว้ 2 บรรทัด */
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .product-price {
+        font-size: 1.3em;
+        font-weight: bold;
+        color: #FF4B4B;
+        margin-bottom: 10px;
+    }
     .stButton>button {
         width: 100%;
-        border-radius: 10px;
-        height: 3.5em;
+        border-radius: 8px;
+        background-color: #007BFF;
+        color: white;
         font-weight: bold;
-        background-color: #ffffff;
-        border: 2px solid #f0f2f6;
     }
     .stButton>button:hover {
-        border: 2px solid #ff4b4b;
-        color: #ff4b4b;
+        background-color: #0056b3;
+        color: white;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -38,21 +55,30 @@ if 'cart' not in st.session_state: st.session_state.cart = []
 if 'last_bill' not in st.session_state: st.session_state.last_bill = None
 
 st.title("🏪 TAS POS System")
-st.write(f"ผู้ใช้งาน: แอดมิน | พร้อมเพย์: **094-501-6189**")
 
 df_products = load_products()
-col1, col2 = st.columns([2.5, 1])
+col1, col2 = st.columns([2.8, 1.2])
 
 with col1:
     if not df_products.empty:
+        # จัด Grid 4 คอลัมน์
         grid = st.columns(4)
         for i, row in df_products.iterrows():
             with grid[i % 4]:
+                # แสดงรูปภาพ
                 st.image(row['Image_URL'], use_container_width=True)
-                # ปุ่มกดขนาดใหญ่ใต้รูป
-                if st.button(f"➕ {row['Name']}\n{row['Price']:,} ฿", key=f"item_{i}"):
+                
+                # แสดงชื่อสินค้า (ตัวหนา ชัดเจน)
+                st.markdown(f'<div class="product-title">{row["Name"]}</div>', unsafe_allow_html=True)
+                
+                # แสดงราคา (ตัวหนา สีแดง)
+                st.markdown(f'<div class="product-price">{row["Price"]:,} ฿</div>', unsafe_allow_html=True)
+                
+                # ปุ่มกดเพิ่มลงตะกร้า
+                if st.button(f"เพิ่มรายการ", key=f"item_{i}"):
                     st.session_state.cart.append({"Name": row['Name'], "Price": row['Price']})
                     st.rerun()
+                st.write("") # เพิ่มช่องว่างระหว่างแถว
     else:
         st.info("🔄 กำลังดึงข้อมูลสินค้า...")
 
@@ -61,11 +87,11 @@ with col2:
     if st.session_state.cart:
         df_cart = pd.DataFrame(st.session_state.cart)
         for idx, item in df_cart.iterrows():
-            st.markdown(f"• {item['Name']} : **{item['Price']:,} ฿**")
+            st.markdown(f"**{item['Name']}** <span style='float:right;'>{item['Price']:,} ฿</span>", unsafe_allow_html=True)
         
         total = sum(item['Price'] for item in st.session_state.cart)
         st.divider()
-        st.markdown(f"### ยอดรวม: :red[{total:,.2f}] บาท")
+        st.markdown(f"### รวมทั้งหมด: :red[{total:,.2f}] บาท")
         
         method = st.radio("วิธีชำระเงิน", ["💵 เงินสด", "📱 โอนเงิน"], horizontal=True)
         
@@ -81,7 +107,7 @@ with col2:
                 st.session_state.last_bill = {"total": total, "type": method}
                 st.session_state.cart = []
                 st.rerun()
-            except: st.error("บันทึกข้อมูลไม่สำเร็จ")
+            except: st.error("บันทึกไม่สำเร็จ")
 
         if st.button("🗑️ ล้างตะกร้า"):
             st.session_state.cart = []
@@ -89,11 +115,11 @@ with col2:
     else:
         if st.session_state.last_bill:
             last = st.session_state.last_bill
-            st.success(f"บันทึกบิลล่าสุด {last['total']:,} ฿ เรียบร้อย!")
+            st.success(f"ชำระเรียบร้อย {last['total']:,} ฿")
             if "โอน" in last['type']:
                 st.image(f"https://promptpay.io/0945016189/{last['total']}.png")
-            if st.button("เริ่มบิลใหม่"):
+            if st.button("รับบิลถัดไป"):
                 st.session_state.last_bill = None
                 st.rerun()
         else:
-            st.write("กรุณาเลือกสินค้าด้านซ้าย")
+            st.info("ยังไม่มีสินค้าในตะกร้า")
