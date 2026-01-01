@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 
-# 1. ข้อมูลการเชื่อมต่อ
+# 1. ข้อมูลการเชื่อมต่อ (เช็ค URL ให้ถูกต้องนะครับ)
 API_URL = "https://script.google.com/macros/s/AKfycbxwm0SVcvcm327H-zdEIa7RCM6I5HwWst9UtXqRU_gvoiBXeZkVrxczLUDIFHVvrw_z/exec"
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=0&single=true&output=csv"
 
@@ -29,41 +29,50 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. ฟังก์ชันโหลดข้อมูล
-@st.cache_data(ttl=60)
+# 3. ฟังก์ชันโหลดข้อมูล (ป้องกัน Error ถ้าเชื่อมต่อไม่ได้)
 def load_data():
     try:
         df = pd.read_csv(SHEET_URL)
         df.columns = df.columns.str.strip()
-        if 'Stock' not in df.columns: df['Stock'] = 100 # ค่าจำลอง
+        if 'Stock' not in df.columns: df['Stock'] = 0
         return df
-    except: return pd.DataFrame()
+    except Exception as e:
+        st.error(f"ไม่สามารถเชื่อมต่อข้อมูลได้: {e}")
+        return pd.DataFrame()
 
+# เตรียมระบบ Session
 if 'cart' not in st.session_state: st.session_state.cart = {}
 if 'sales_history' not in st.session_state: st.session_state.sales_history = []
 
 # --- แถบเมนูด้านข้าง ---
+st.sidebar.title("🛠 ตั้งค่าระบบ")
+if st.sidebar.button("🔄 โหลดข้อมูลใหม่"):
+    st.cache_data.clear()
+    st.rerun()
+
 menu = st.sidebar.selectbox("เลือกหน้าการทำงาน", ["🛒 หน้าขายสินค้า (POS)", "📊 สรุปยอด & สต็อก"])
+
+# โหลดข้อมูลสินค้ามาเตรียมไว้
+df_products = load_data()
 
 # ==========================================
 # หน้า 1: POS
 # ==========================================
 if menu == "🛒 หน้าขายสินค้า (POS)":
     st.title("🏪 TAS PROFESSIONAL POS")
-    df = load_data()
     col1, col2 = st.columns([3.5, 1.5])
     
     with col1:
-        if not df.empty:
+        if not df_products.empty:
             grid = st.columns(4)
-            for i, row in df.iterrows():
+            for i, row in df_products.iterrows():
                 with grid[i % 4]:
                     st.markdown(f"""
                         <div class="product-card">
                             <div class="img-box"><img src="{row['Image_URL']}"></div>
                             <div class="p-name">{row['Name']}</div>
                             <div class="p-price">{row['Price']:,} ฿</div>
-                            <div style='color: #888; font-size: 0.8em;'>สต็อก: {row['Stock']}</div>
+                            <div style='color: #888; font-size: 0.8em;'>คงเหลือ: {row['Stock']}</div>
                         </div>
                     """, unsafe_allow_html=True)
                     if st.button(f"➕ เลือก", key=f"add_{i}"):
@@ -73,16 +82,17 @@ if menu == "🛒 หน้าขายสินค้า (POS)":
                         else:
                             st.session_state.cart[name] = {'price': price, 'qty': 1}
                         st.rerun()
+        else:
+            st.warning("กำลังรอข้อมูลจาก Google Sheets...")
 
     with col2:
         st.subheader("🛒 ตะกร้าสินค้า")
         if st.session_state.cart:
             total = 0
-            current_items = []
+            items_text = []
             for name, info in list(st.session_state.cart.items()):
-                item_total = info['price'] * info['qty']
-                total += item_total
-                current_items.append(f"{name} x{info['qty']}")
+                total += info['price'] * info['qty']
+                items_text.append(f"{name} x{info['qty']}")
                 
                 c_a, c_b = st.columns([3, 1])
                 with c_a: st.write(f"**{name}** x{info['qty']}")
@@ -96,45 +106,45 @@ if menu == "🛒 หน้าขายสินค้า (POS)":
             st.markdown(f"## รวม: {total:,.2f} ฿")
             pay = st.radio("ชำระโดย:", ["เงินสด", "โอนเงิน"], horizontal=True)
             
-            if st.button("✅ ยืนยันการขาย", type="primary", use_container_width=True):
+            if st.button("✅ ยืนยันการขาย", type="primary"):
                 st.session_state.sales_history.append({
-                    "เวลา": pd.Timestamp.now().strftime("%H:%M"),
-                    "รายการ": ", ".join(current_items),
+                    "เวลา": pd.Timestamp.now().strftime("%H:%M:%S"),
+                    "รายการ": ", ".join(items_text),
                     "ยอดรวม": total,
                     "ประเภท": pay
                 })
-                # ยิงข้อมูลเข้า Google Sheets
-                try: requests.get(f"{API_URL}?bill_id=B{pd.Timestamp.now().strftime('%M%S')}&items={current_items}&total={total}&payment_type={pay}", timeout=0.1)
+                # ส่งข้อมูลไป Google Sheets
+                try: requests.get(f"{API_URL}?bill_id=B{pd.Timestamp.now().strftime('%M%S')}&items={items_text}&total={total}&payment_type={pay}", timeout=0.1)
                 except: pass
-                st.session_state.last_sale = {"total": total, "pay": pay}
                 st.session_state.cart = {}
+                st.success("บันทึกการขายสำเร็จ!")
                 st.rerun()
-        
-        elif 'last_sale' in st.session_state:
-            st.success(f"ขายสำเร็จ! {st.session_state.last_sale['total']:,} ฿")
-            if st.button("รับบิลใหม่"):
-                del st.session_state.last_sale
-                st.rerun()
+        else:
+            st.write("กรุณาเลือกสินค้า...")
 
 # ==========================================
-# หน้า 2: Dashboard & Stock (แบบไม่มีกราฟ)
+# หน้า 2: Dashboard & Stock
 # ==========================================
 else:
-    st.title("📊 สรุปยอดขายวันนี้")
+    st.title("📊 ระบบหลังบ้าน & สต็อก")
+    
+    # ส่วนสรุปยอด
     if st.session_state.sales_history:
         df_h = pd.DataFrame(st.session_state.sales_history)
-        c1, c2, c3 = st.columns(3)
-        with c1: st.markdown(f"<div class='metric-card'><h3>ยอดรวม</h3><h2>{df_h['ยอดรวม'].sum():,.2f} ฿</h2></div>", unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        with c1: st.markdown(f"<div class='metric-card'><h3>ยอดขายรวม</h3><h2>{df_h['ยอดรวม'].sum():,.2f} ฿</h2></div>", unsafe_allow_html=True)
         with c2: st.markdown(f"<div class='metric-card'><h3>จำนวนบิล</h3><h2>{len(df_h)}</h2></div>", unsafe_allow_html=True)
-        with c3: 
-            cash = df_h[df_h['ประเภท']=='เงินสด']['ยอดรวม'].sum()
-            st.markdown(f"<div class='metric-card'><h3>เงินสด</h3><h2>{cash:,.2f} ฿</h2></div>", unsafe_allow_html=True)
         
-        st.subheader("📝 ประวัติการขาย")
+        st.subheader("📝 ประวัติการขายวันนี้")
         st.dataframe(df_h, use_container_width=True)
     else:
-        st.info("ยังไม่มีข้อมูลการขาย")
+        st.info("ยังไม่มีข้อมูลการขายในรอบนี้")
 
     st.divider()
-    st.subheader("📦 ตรวจสอบสต็อก")
-    st.dataframe(load_data()[['Name', 'Stock']], use_container_width=True)
+    
+    # ส่วนสต็อก
+    st.subheader("📦 ตารางสต็อกสินค้า")
+    if not df_products.empty:
+        st.dataframe(df_products[['Name', 'Price', 'Stock']], use_container_width=True)
+    else:
+        st.write("ไม่พบข้อมูลสินค้า")
