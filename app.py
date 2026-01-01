@@ -2,17 +2,18 @@ import streamlit as st
 import pandas as pd
 import time
 
-# 1. ข้อมูลการเชื่อมต่อ
+# 1. ข้อมูลการเชื่อมต่อ (ลิงก์ตรงจากชีต Stock)
 FILE_ID = "1XqL_8rB3vUa6I6N6_uLz7G_7fPjG0r_D-uB4fP5Y6X0"
 GID = "228640428"
 SHEET_URL = f"https://docs.google.com/spreadsheets/d/{FILE_ID}/export?format=csv&gid={GID}"
 
 st.set_page_config(page_title="TAS POS SYSTEM", layout="wide")
 
-# 2. ฟังก์ชันโหลดข้อมูล
+# 2. ฟังก์ชันโหลดข้อมูล (ชิดขอบซ้ายทั้งหมดเพื่อป้องกัน IndentationError)
 @st.cache_data(ttl=5)
 def load_stock_data():
     try:
+        # บังคับดึงค่าใหม่ตลอดเพื่อแก้ปัญหาเลข 0
         fresh_url = f"{SHEET_URL}&t={int(time.time())}"
         df = pd.read_csv(fresh_url)
         df.columns = df.columns.str.strip()
@@ -25,7 +26,7 @@ def load_stock_data():
     except:
         return pd.DataFrame()
 
-# 3. เตรียมตัวแปร
+# 3. เตรียมตัวแปรระบบ
 if 'pos_cart' not in st.session_state: st.session_state.pos_cart = {}
 if 'pos_history' not in st.session_state: st.session_state.pos_history = []
 if 'last_bill' not in st.session_state: st.session_state.last_bill = None
@@ -40,7 +41,7 @@ if st.sidebar.button("🔄 ดึงข้อมูลล่าสุด"):
     st.cache_data.clear()
     st.rerun()
 
-# 5. หน้าขาย (POS)
+# 5. หน้าขายสินค้า
 if menu == "🛒 หน้าขาย (POS)":
     st.title("🏪 TAS POS SYSTEM")
     col_p, col_c = st.columns([3, 2])
@@ -59,11 +60,11 @@ if menu == "🛒 หน้าขาย (POS)":
                     """, unsafe_allow_html=True)
                     if row['Stock'] > 0:
                         if st.button(f"เลือก {row['Name']}", key=f"sel_{i}"):
-                            name = row['Name']
-                            if name in st.session_state.pos_cart:
-                                st.session_state.pos_cart[name]['qty'] += 1
+                            n = row['Name']
+                            if n in st.session_state.pos_cart:
+                                st.session_state.pos_cart[n]['qty'] += 1
                             else:
-                                st.session_state.pos_cart[name] = {'price': row['Price'], 'qty': 1}
+                                st.session_state.pos_cart[n] = {'price': row['Price'], 'qty': 1}
                             st.rerun()
                     else:
                         st.button("สินค้าหมด", key=f"sel_{i}", disabled=True)
@@ -71,13 +72,13 @@ if menu == "🛒 หน้าขาย (POS)":
         st.subheader("🛒 รายการซื้อ")
         if st.session_state.pos_cart:
             total = 0
-            for name, item in list(st.session_state.pos_cart.items()):
+            for n, item in list(st.session_state.pos_cart.items()):
                 total += item['price'] * item['qty']
                 c1, c2 = st.columns([3, 1])
-                with c1: st.write(f"**{name}** x{item['qty']}")
+                with c1: st.write(f"**{n}** x{item['qty']}")
                 with c2: 
-                    if st.button("❌", key=f"del_{name}"):
-                        del st.session_state.pos_cart[name]
+                    if st.button("❌", key=f"del_{n}"):
+                        del st.session_state.pos_cart[n]
                         st.rerun()
             st.divider()
             st.markdown(f"### รวม: :orange[{total:,.2f}] ฿")
