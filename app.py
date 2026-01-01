@@ -2,13 +2,14 @@ import streamlit as st
 import pandas as pd
 import requests
 import segno
+import io
 
-# 1. ใส่ URL ที่ก๊อปปี้มาจาก Apps Script (รูปที่ 21) ตรงนี้
+# 1. ลิงก์ล่าสุดที่คุณให้มา
 API_URL = "https://script.google.com/macros/s/AKfycbxwm0SVcvcm327H-zdEIa7RCM6I5HwWst9UtXqRU_gvoiBXeZkVrxczLUDIFHVvrw_z/exec"
 
-st.set_page_config(page_title="My POS with Images", layout="wide")
+st.set_page_config(page_title="My POS System", layout="wide")
 
-# ข้อมูลสินค้าพร้อมรูปภาพ
+# ข้อมูลสินค้า (เมนูตัวอย่าง)
 if 'products' not in st.session_state:
     st.session_state.products = [
         {"Name": "กาแฟดำ", "Price": 50, "Image": "https://cdn-icons-png.flaticon.com/512/1047/1047503.png"},
@@ -42,7 +43,7 @@ with col2:
         st.write(f"## รวม: {total} บาท")
         
         if st.button("ชำระเงิน & บันทึกยอด"):
-            # เตรียมข้อมูลส่งไป Google Sheets
+            # เตรียมข้อมูล
             data = {
                 "bill_id": "BILL-" + pd.Timestamp.now().strftime("%H%M%S"),
                 "items": ", ".join(df['Name'].tolist()),
@@ -50,30 +51,24 @@ with col2:
             }
             
             try:
-                # ส่งข้อมูล
+                # ส่งข้อมูลไป Google Sheets
                 res = requests.post(API_URL, json=data)
                 
                 if res.status_code == 200:
-                    st.success("บันทึกยอดขายลง Google Sheets สำเร็จ!")
-                    # สร้าง QR Code (จำลอง)
-                qr = segno.make_qr(f"https://promptpay.io/0812345678/{total}")
-                import io
-                img_buf = io.BytesIO()
-                qr.save(img_buf, kind='png', scale=5)
-                st.image(img_buf.getvalue(), caption="สแกนจ่ายตรงนี้")
-                st.session_state.cart = [] # ล้างตะกร้า
+                    st.success("✅ บันทึกยอดขายสำเร็จ!")
+                    # สร้าง QR Code แบบใหม่ให้หาย Error
+                    qr = segno.make_qr(f"https://promptpay.io/0812345678/{total}")
+                    img_buf = io.BytesIO()
+                    qr.save(img_buf, kind='png', scale=5)
+                    st.image(img_buf.getvalue(), caption="สแกนจ่ายตรงนี้")
+                    st.session_state.cart = [] # ล้างตะกร้า
                 else:
-                    st.error(f"การเชื่อมต่อมีปัญหา (Code: {res.status_code})")
+                    st.error(f"❌ การเชื่อมต่อมีปัญหา (Code: {res.status_code})")
             except Exception as e:
-                st.error(f"ไม่สามารถส่งข้อมูลได้: {e}")
+                st.error(f"⚠️ ไม่สามารถส่งข้อมูลได้: {e}")
                 
         if st.button("ล้างตะกร้า"):
             st.session_state.cart = []
             st.rerun()
     else:
         st.write("ยังไม่มีสินค้าในตะกร้า")
-
-
-
-
-
