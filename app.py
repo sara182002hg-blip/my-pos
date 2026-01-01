@@ -8,18 +8,40 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0El
 
 st.set_page_config(page_title="TAS Modern POS", layout="wide", initial_sidebar_state="collapsed")
 
-# 2. ปรับแต่ง CSS เพื่อความสวยงาม
+# 2. CSS ปรับแต่งให้รูปดูเหมือนปุ่มและมีเอฟเฟกต์เมื่อเอาเมาส์ไปวาง
 st.markdown("""
     <style>
-    .main { background-color: #f5f7f9; }
-    .stButton>button { width: 100%; border-radius: 10px; height: 3em; font-weight: bold; }
-    .product-card {
-        background-color: white; padding: 15px; border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; margin-bottom: 20px;
+    .main { background-color: #f8f9fa; }
+    /* สไตล์ Card สินค้า */
+    .stButton > button {
+        border: none;
+        background: none;
+        padding: 0;
+        transition: transform 0.2s;
     }
-    .price-tag { color: #ff4b4b; font-size: 1.2em; font-weight: bold; }
-    .cart-section { background-color: #ffffff; padding: 20px; border-radius: 20px; border: 1px solid #e0e0e0; }
-    h1, h2, h3 { color: #2c3e50; }
+    .stButton > button:hover {
+        transform: scale(1.05); /* ขยายเล็กน้อยเมื่อเมาส์วาง */
+        background: none;
+        border: none;
+    }
+    .product-box {
+        background-color: white;
+        padding: 10px;
+        border-radius: 15px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        text-align: center;
+    }
+    .price-text {
+        color: #e67e22;
+        font-weight: bold;
+        font-size: 1.1em;
+    }
+    .cart-container {
+        background-color: white;
+        padding: 20px;
+        border-radius: 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -31,84 +53,81 @@ def load_products():
         return df
     except: return pd.DataFrame()
 
-# เตรียม Session State
 if 'cart' not in st.session_state: st.session_state.cart = []
 if 'last_bill' not in st.session_state: st.session_state.last_bill = None
 
-# ส่วนหัวของโปรแกรม
-st.markdown("# 🏪 **TAS MODERN POS**")
-st.caption("ระบบจัดการร้านค้าอัจฉริยะ | เบอร์พร้อมเพย์: 094-501-6189")
-st.divider()
+st.markdown("# 🏪 **TAS QUICK POS**")
+st.caption("แตะที่รูปสินค้าเพื่อเพิ่มลงตะกร้า | พร้อมเพย์: 094-501-6189")
 
 df_products = load_products()
-col1, col2 = st.columns([2.5, 1])
+col1, col2 = st.columns([3, 1.2])
 
 with col1:
-    st.subheader("🛍️ รายการสินค้า")
     if not df_products.empty:
-        # แสดงสินค้าเป็น Grid
-        items_per_row = 4
-        for i in range(0, len(df_products), items_per_row):
-            cols = st.columns(items_per_row)
-            for j in range(items_per_row):
-                if i + j < len(df_products):
-                    row = df_products.iloc[i + j]
-                    with cols[j]:
-                        st.markdown(f'<div class="product-card">', unsafe_allow_html=True)
-                        st.image(row['Image_URL'], use_container_width=True)
-                        st.markdown(f"**{row['Name']}**")
-                        st.markdown(f'<p class="price-tag">{row["Price"]:,} ฿</p>', unsafe_allow_html=True)
-                        if st.button(f"➕ เพิ่ม", key=f"add_{i+j}"):
-                            st.session_state.cart.append({"Name": row['Name'], "Price": row['Price']})
-                            st.rerun()
-                        st.markdown('</div>', unsafe_allow_html=True)
+        # จัด Grid 4 คอลัมน์
+        cols = st.columns(4)
+        for i, row in df_products.iterrows():
+            with cols[i % 4]:
+                # ใช้ปุ่มที่ครอบทั้งรูปภาพและชื่อ
+                if st.button(label=f" ", key=f"img_{i}", help=f"คลิกเพื่อเพิ่ม {row['Name']}"):
+                    st.session_state.cart.append({"Name": row['Name'], "Price": row['Price']})
+                    st.rerun()
+                
+                # แสดงรายละเอียดสินค้าใต้ปุ่ม (รูปจะซ้อนอยู่บนปุ่มด้านบน)
+                st.markdown(f"""
+                    <div class="product-box" style="margin-top: -50px; pointer-events: none;">
+                        <img src="{row['Image_URL']}" style="width:100%; border-radius:10px;">
+                        <div style="margin-top:10px; font-weight:bold; color:#34495e;">{row['Name']}</div>
+                        <div class="price-text">{row['Price']:,} ฿</div>
+                    </div>
+                """, unsafe_allow_html=True)
+                st.write("") # เว้นวรรคระหว่างแถว
     else:
-        st.info("กำลังโหลดข้อมูลสินค้า...")
+        st.warning("กำลังดึงข้อมูลสินค้า...")
 
 with col2:
-    st.markdown('<div class="cart-section">', unsafe_allow_html=True)
+    st.markdown('<div class="cart-container">', unsafe_allow_html=True)
     st.subheader("🛒 ตะกร้าสินค้า")
     
     if st.session_state.cart:
         df_cart = pd.DataFrame(st.session_state.cart)
-        # แสดงตารางแบบย่อ
         for idx, item in df_cart.iterrows():
-            st.write(f"🔹 {item['Name']} : **{item['Price']:,} ฿**")
+            st.markdown(f"✅ {item['Name']} <span style='float:right;'>{item['Price']:,} ฿</span>", unsafe_allow_html=True)
         
         total = sum(item['Price'] for item in st.session_state.cart)
         st.divider()
-        st.markdown(f"### ยอดรวม: <span style='color:red'>{total:,.2f} บาท</span>", unsafe_allow_html=True)
+        st.markdown(f"### รวม: <span style='color:#27ae60'>{total:,.2f} บาท</span>", unsafe_allow_html=True)
         
-        pay_type = st.segmented_control("วิธีชำระเงิน", ["💵 เงินสด", "📱 โอนเงิน"], default="💵 เงินสด")
+        method = st.radio("วิธีชำระเงิน", ["💵 เงินสด", "📱 โอนเงิน"], horizontal=True)
         
-        if st.button("🔥 ยืนยันชำระเงิน", type="primary"):
+        if st.button("🏁 จบการขาย", type="primary", use_container_width=True):
+            payload = {
+                "bill_id": "B" + pd.Timestamp.now().strftime("%H%M%S"),
+                "items": ", ".join(df_cart['Name'].tolist()),
+                "total": float(total),
+                "payment_type": method
+            }
             try:
-                payload = {
-                    "bill_id": "B" + pd.Timestamp.now().strftime("%y%m%d%H%M"),
-                    "items": ", ".join(df_cart['Name'].tolist()),
-                    "total": float(total),
-                    "payment_type": pay_type
-                }
                 requests.post(API_URL, json=payload)
-                st.session_state.last_bill = {"total": total, "type": pay_type}
+                st.session_state.last_bill = {"total": total, "type": method}
                 st.session_state.cart = []
                 st.rerun()
-            except: st.error("ระบบบันทึกมีปัญหา")
+            except: st.error("บันทึกผิดพลาด")
 
-        if st.button("🗑️ ล้างตะกร้า"):
+        if st.button("🗑️ ล้างตะกร้าทั้งหมด", use_container_width=True):
             st.session_state.cart = []
             st.rerun()
     else:
         if st.session_state.last_bill:
             last = st.session_state.last_bill
-            st.success(f"ชำระสำเร็จ: {last['total']:,} ฿")
+            st.success(f"บันทึกสำเร็จ! ยอดรวม {last['total']:,} ฿")
             if "โอน" in last['type']:
                 st.image(f"https://promptpay.io/0945016189/{last['total']}.png")
             else:
                 st.balloons()
-            if st.button("บิลถัดไป"):
+            if st.button("รับลูกค้าคนถัดไป"):
                 st.session_state.last_bill = None
                 st.rerun()
         else:
-            st.write("ยังไม่มีสินค้าในตะกร้า")
+            st.write("ยังไม่มีสินค้า...")
     st.markdown('</div>', unsafe_allow_html=True)
