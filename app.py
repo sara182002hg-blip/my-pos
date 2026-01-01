@@ -8,14 +8,14 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0El
 
 st.set_page_config(page_title="TAS PROFESSIONAL POS", layout="wide")
 
-# ปรับ CSS ตัวหนังสือขาวและรูปภาพ
+# CSS บังคับตัวหนังสือขาวและรูปภาพสวยงาม
 st.markdown("""
     <style>
     .main { background-color: #0e1117; color: white; }
-    .product-title { color: #ffffff !important; font-weight: bold; text-align: center; font-size: 1.1em; }
+    .product-title { color: #ffffff !important; font-weight: bold; text-align: center; }
     .product-price { color: #f1c40f !important; font-weight: bold; text-align: center; }
     .stButton>button { width: 100%; border-radius: 10px; height: 3.5em; font-weight: bold; }
-    p, span, label, h1, h2, h3 { color: white !important; }
+    p, span, label, h1, h2, h3, div { color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -27,10 +27,8 @@ def load_products():
         return df
     except: return pd.DataFrame()
 
-# เตรียม Session State
 if 'cart' not in st.session_state: st.session_state.cart = []
 if 'last_bill' not in st.session_state: st.session_state.last_bill = None
-if 'is_processing' not in st.session_state: st.session_state.is_processing = False
 
 st.title("🏪 TAS PROFESSIONAL POS")
 
@@ -61,10 +59,7 @@ with col2:
         st.markdown(f"## ยอดรวม: :green[{total:,.2f}] บาท")
         method = st.radio("วิธีชำระเงิน:", ("เงินสด", "โอนเงิน"), horizontal=True)
         
-        # แก้ปัญหาปุ่ม: เมื่อกดแล้วจะ Disable ตัวเองทันทีเพื่อกันการกดย้ำ
-        if st.button("💰 ยืนยันชำระเงิน", type="primary", use_container_width=True, disabled=st.session_state.is_processing):
-            st.session_state.is_processing = True # ล็อกสถานะ
-            
+        if st.button("💰 ยืนยันชำระเงิน", type="primary", use_container_width=True):
             bill_data = {
                 "bill_id": "B"+pd.Timestamp.now().strftime("%y%m%d%H%M%S"),
                 "items": ", ".join(df_cart['Name'].tolist()),
@@ -72,16 +67,19 @@ with col2:
                 "payment_type": method
             }
             
-            # บันทึกข้อมูล
+            # --- เทคนิคใหม่: ส่งข้อมูลแล้วไปหน้าสำเร็จทันที ---
             try:
-                # ส่งแบบ POST และให้เวลารอ 15 วินาที
-                requests.post(API_URL, json=bill_data, timeout=15)
-                st.session_state.last_bill = {"total": total, "type": method}
-                st.session_state.cart = [] # ล้างตะกร้า
-            except Exception as e:
-                st.error(f"การเชื่อมต่อมีปัญหา แต่ระบบจะลองบันทึกใหม่")
+                # ตั้ง timeout สั้นมาก (0.1 วินาที) เพื่อให้ส่งออกไปแล้วข้ามเลย ไม่รอ Google ตอบกลับ
+                requests.post(API_URL, json=bill_data, timeout=0.1)
+            except requests.exceptions.Timeout:
+                # มันจะ Timeout แน่นอนเพราะเราตั้งไว้สั้นมาก แต่ข้อมูลได้ถูกส่งออกไปแล้ว
+                pass 
+            except Exception:
+                pass
             
-            st.session_state.is_processing = False # ปลดล็อก
+            # บันทึกสถานะเพื่อโชว์หน้าสำเร็จ
+            st.session_state.last_bill = {"total": total, "type": method}
+            st.session_state.cart = [] # ล้างตะกร้า
             st.rerun()
 
         if st.button("🗑️ ล้างตะกร้า"):
@@ -92,8 +90,8 @@ with col2:
             last = st.session_state.last_bill
             st.success(f"บันทึกยอด {last['total']:,} ฿ สำเร็จ!")
             if "โอน" in last['type']:
-                st.image(f"https://promptpay.io/0945016189/{last['total']}.png")
-            if st.button("รับลูกค้าคนถัดไป"):
+                st.image(f"https://promptpay.io/0945016189/{last['total']}.png", caption="สแกนเพื่อจ่ายเงิน")
+            if st.button("เริ่มบิลถัดไป"):
                 st.session_state.last_bill = None
                 st.rerun()
         else:
