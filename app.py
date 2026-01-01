@@ -10,27 +10,25 @@ st.set_page_config(page_title="TAS POS PROFESSIONAL", layout="wide")
 # 2. ฟังก์ชันโหลดข้อมูล (เพิ่มระบบ Check คอลัมน์แบบเข้มงวด)
 @st.cache_data(ttl=30) # ลดเวลาจำเหลือ 30 วินาทีเพื่อให้อัปเดตไวขึ้น
 def load_stock_data():
+    @st.cache_data(ttl=5) # ลดเวลาเหลือ 5 วินาทีเพื่อทดสอบ
+def load_stock_data():
     try:
-        # ดึงข้อมูลจาก Google Sheets
+        # ดึงข้อมูลและห้ามใช้ Cache เก่า
         df = pd.read_csv(SHEET_URL)
-        df.columns = df.columns.str.strip() # ลบช่องว่างส่วนเกินที่หัวตาราง
+        df.columns = df.columns.str.strip()
         
-        # --- ตรวจสอบและซ่อมแซมคอลัมน์ (ป้องกัน KeyError) ---
-        expected_cols = {
-            'Name': 'ไม่ระบุชื่อ',
-            'Price': 0,
-            'Stock': 0,
-            'Image_URL': ''
-        }
+        # แสดงผลชั่วคราวเพื่อตรวจสอบ (เมื่อเลขมาแล้วค่อยลบบรรทัดนี้ออก)
+        # st.write("คอลัมน์ที่พบ:", list(df.columns)) 
         
-        for col, default_val in expected_cols.items():
-            if col not in df.columns:
-                df[col] = default_val # ถ้าหาคอลัมน์ไม่เจอ ให้สร้างขึ้นมาใหม่ทันที
+        if 'Stock' not in df.columns:
+            st.error("⚠️ ไม่พบคอลัมน์ 'Stock' ในลิงก์ที่ระบุ กรุณาเช็คชื่อหัวตารางใน Sheets")
         
-        # แปลงข้อมูลให้เป็นตัวเลขที่ถูกต้อง
         df['Price'] = pd.to_numeric(df['Price'], errors='coerce').fillna(0)
         df['Stock'] = pd.to_numeric(df['Stock'], errors='coerce').fillna(0).astype(int)
-        
+        return df
+    except Exception as e:
+        st.error(f"❌ โหลดข้อมูลไม่ได้: {e}")
+        return pd.DataFrame()
         return df
     except Exception as e:
         return pd.DataFrame(columns=['Name', 'Price', 'Stock', 'Image_URL'])
@@ -147,4 +145,5 @@ else:
         )
     else:
         st.warning("ไม่สามารถโหลดสต็อกได้")
+
 
