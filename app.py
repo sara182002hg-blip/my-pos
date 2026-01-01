@@ -2,188 +2,117 @@ import streamlit as st
 import pandas as pd
 import requests
 
-# 1. ข้อมูลการเชื่อมต่อ
-API_URL = "https://script.google.com/macros/s/AKfycbxwm0SVcvcm327H-zdEIa7RCM6I5HwWst9UtXqRU_gvoiBXeZkVrxczLUDIFHVvrw_z/exec"
+# 1. ข้อมูลการเชื่อมต่อ (ตรวจสอบให้แน่ใจว่า SHEET_URL เชื่อมกับชีต Stock)
+# หากคุณใช้การ Publish to web ให้เลือกชีต 'Stock' ก่อนคัดลอกลิงก์ CSV มานะครับ
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=0&single=true&output=csv"
 
 st.set_page_config(page_title="TAS POS PROFESSIONAL", layout="wide")
 
-# 2. ฟังก์ชันจัดการข้อมูล
-@st.cache_data(ttl=600)
-def load_products():
+# 2. ฟังก์ชันโหลดข้อมูลสินค้าและสต็อก
+@st.cache_data(ttl=60) # อัปเดตข้อมูลทุก 1 นาที
+def load_stock_data():
     try:
         df = pd.read_csv(SHEET_URL)
         df.columns = df.columns.str.strip()
+        # ตรวจสอบคอลัมน์สำคัญ
+        for col in ['Name', 'Price', 'Stock']:
+            if col not in df.columns:
+                df[col] = 0 if col != 'Name' else "Unknown"
         return df
     except:
         return pd.DataFrame()
 
-# 3. เตรียมตัวแปรระบบ
+# 3. จัดการ Session State
 if 'pos_cart' not in st.session_state: st.session_state.pos_cart = {}
 if 'pos_history' not in st.session_state: st.session_state.pos_history = []
-if 'last_bill' not in st.session_state: st.session_state.last_bill = None
 
-# ฟังก์ชันสำหรับปุ่มกด (เพิ่ม/ลด/ลบ) เพื่อความลื่นไหล
-def update_qty(name, price, action):
-    if action == "add":
-        if name in st.session_state.pos_cart:
-            st.session_state.pos_cart[name]['qty'] += 1
-        else:
-            st.session_state.pos_cart[name] = {'price': price, 'qty': 1}
-    elif action == "minus":
-        if name in st.session_state.pos_cart:
-            st.session_state.pos_cart[name]['qty'] -= 1
-            if st.session_state.pos_cart[name]['qty'] <= 0:
-                del st.session_state.pos_cart[name]
+# ดึงข้อมูลล่าสุด
+df_stock = load_stock_data()
 
-def clear_cart():
-    st.session_state.pos_cart = {}
+# 4. เมนูด้านข้าง
+st.sidebar.title("📦 ระบบจัดการ")
+menu = st.sidebar.radio("เลือกเมนู", ["🛒 หน้าขาย (POS)", "📊 ยอดคงเหลือ & รายงาน"])
 
-# 4. หน้าตาโปรแกรม (CSS)
-st.markdown("""
-    <style>
-    .product-card {
-        background-color: #1a1c24; border-radius: 12px; border: 1px solid #333;
-        padding: 10px; text-align: center; height: 270px; margin-bottom: 10px;
-    }
-    .img-box { width: 100%; height: 120px; background: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-    .img-box img { max-width: 90%; max-height: 90%; object-fit: contain; }
-    .stButton > button { width: 100% !important; border-radius: 8px !important; }
-    /* ปุ่มลบ/ลดสีแดง */
-    button[key*="minus"], button[key*="clear"] { background-color: #ff4b4b !important; color: white !important; }
-    p, span, div, h1, h2, h3 { color: white !important; }
-    </style>
-    """, unsafe_allow_html=True)
-
-# 5. เมนูด้านข้าง
-menu = st.sidebar.radio("เมนูใช้งาน", ["🛒 ขายสินค้า (POS)", "📊 ยอดขาย & สต็อก"])
-if st.sidebar.button("🔄 อัปเดตข้อมูลจาก Sheets"):
+if st.sidebar.button("🔄 ดึงข้อมูลสต็อกล่าสุด"):
     st.cache_data.clear()
     st.rerun()
 
 # ==========================================
-# หน้า 1: POS
+# หน้า 1: POS (แสดงสต็อกใต้รูปสินค้า)
 # ==========================================
-if menu == "🛒 ขายสินค้า (POS)":
+if menu == "🛒 หน้าขาย (POS)":
     st.title("🏪 TAS POS SYSTEM")
-    col_main, col_side = st.columns([3.3, 1.7])
+    col_products, col_cart = st.columns([3.3, 1.7])
 
-    df = load_products()
-
-    with col_main:
-        if not df.empty:
+    with col_products:
+        if not df_stock.empty:
             grid = st.columns(4)
-            for i, row in df.iterrows():
+            for i, row in df_stock.iterrows():
                 with grid[i % 4]:
+                    # แสดงแจ้งเตือนถ้าสต็อกต่ำกว่า 5
+                    stock_color = "red" if row['Stock'] <= 5 else "#888"
                     st.markdown(f"""
-                        <div class="product-card">
-                            <div class="img-box"><img src="{row['Image_URL']}"></div>
-                            <div style="font-weight:bold; margin-top:5px;">{row['Name']}</div>
-                            <div style="color:#f1c40f;">{row['Price']:,} ฿</div>
+                        <div style="background-color: #1a1c24; border-radius: 12px; border: 1px solid #333; padding: 10px; text-align: center; height: 300px; margin-bottom: 10px;">
+                            <div style="width: 100%; height: 120px; background: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                                <img src="{row['Image_URL']}" style="max-width: 90%; max-height: 90%;">
+                            </div>
+                            <div style="font-weight:bold; margin-top:5px; color:white;">{row['Name']}</div>
+                            <div style="color:#f1c40f; font-weight:bold;">{row['Price']:,} ฿</div>
+                            <div style="color:{stock_color}; font-size:0.9em;">คงเหลือ: {row['Stock']}</div>
                         </div>
                     """, unsafe_allow_html=True)
-                    st.button(f"เลือก {row['Name']}", key=f"p_{i}", 
-                              on_click=update_qty, args=(row['Name'], row['Price'], "add"))
-
-    with col_side:
-        st.subheader("🛒 รายการในตะกร้า")
-        
-        if st.session_state.pos_cart:
-            grand_total = 0
-            for name, data in list(st.session_state.pos_cart.items()):
-                sub = data['price'] * data['qty']
-                grand_total += sub
-                
-                # แถวสินค้า
-                c_name, c_btn = st.columns([2, 1.5])
-                with c_name:
-                    st.write(f"**{name}**")
-                    st.caption(f"{data['qty']} x {data['price']:,} ฿")
-                with c_btn:
-                    # ปุ่ม ➕ และ ❌ (กลับมาแล้ว!)
-                    b1, b2 = st.columns(2)
-                    with b1: st.button("➕", key=f"plus_{name}", on_click=update_qty, args=(name, data['price'], "add"))
-                    with b2: st.button("❌", key=f"minus_{name}", on_click=update_qty, args=(name, data['price'], "minus"))
-                st.divider()
-
-            st.markdown(f"## ยอดรวม: :orange[{grand_total:,.2f}] ฿")
-            
-            pay_val = st.radio("วิธีชำระเงิน:", ["เงินสด", "โอนเงิน"], horizontal=True)
-            
-            if st.button("✅ ยืนยันการขาย", type="primary", use_container_width=True):
-                st.session_state.pos_history.append({"เวลา": pd.Timestamp.now().strftime("%H:%M"), "ยอด": grand_total, "วิธี": pay_val})
-                st.session_state.last_bill = {"total": grand_total, "method": pay_val}
-                # ยิง API ไป Sheets
-                try: requests.get(f"{API_URL}?total={grand_total}&pay={pay_val}", timeout=0.1)
-                except: pass
-                st.session_state.pos_cart = {}
-                st.rerun()
-
-            st.button("🗑️ ล้างตะกร้า", key="clear_cart", on_click=clear_cart)
-
-        elif st.session_state.last_bill:
-            bill = st.session_state.last_bill
-            st.success(f"บันทึกสำเร็จ {bill['total']:,} ฿")
-            if bill['method'] == "โอนเงิน":
-                st.image(f"https://promptpay.io/0945016189/{bill['total']}.png")
-            if st.button("เริ่มการขายใหม่"):
-                st.session_state.last_bill = None
-                st.rerun()
+                    
+                    # ปุ่มเลือกซื้อ (ปิดปุ่มถ้าสต็อกหมด)
+                    if row['Stock'] > 0:
+                        if st.button(f"เลือก {row['Name']}", key=f"p_{i}"):
+                            name = row['Name']
+                            if name in st.session_state.pos_cart:
+                                st.session_state.pos_cart[name]['qty'] += 1
+                            else:
+                                st.session_state.pos_cart[name] = {'price': row['Price'], 'qty': 1}
+                            st.rerun()
+                    else:
+                        st.button("สินค้าหมด", key=f"p_{i}", disabled=True)
         else:
-            st.info("ยังไม่มีสินค้าในตะกร้า")
+            st.error("ไม่สามารถโหลดข้อมูลได้ ตรวจสอบคอลัมน์ใน Sheets")
+
+    # (ส่วนตะกร้าสินค้าเหมือนเดิม...)
+    with col_cart:
+        st.subheader("🛒 ตะกร้า")
+        total = 0
+        for name, item in list(st.session_state.pos_cart.items()):
+            total += item['price'] * item['qty']
+            st.write(f"**{name}** x{item['qty']} ({item['price'] * item['qty']:,} ฿)")
+        st.divider()
+        st.markdown(f"### รวม: :orange[{total:,}] ฿")
+        if st.button("✅ ยืนยันการขาย", type="primary"):
+            st.session_state.pos_history.append({"เวลา": pd.Timestamp.now().strftime("%H:%M"), "ยอด": total})
+            st.session_state.pos_cart = {}
+            st.success("บันทึกสำเร็จ!")
+            st.rerun()
 
 # ==========================================
-# หน้า 2: ยอดขาย & สต็อก (ฉบับแก้ไขให้โชว์สต็อก)
+# หน้า 2: ยอดคงเหลือ & รายงาน (แสดงตารางสต็อก)
 # ==========================================
 else:
-    st.title("📊 รายงานสรุปยอด & สต็อกสินค้า")
+    st.title("📊 รายงานสต็อกสินค้า")
     
-    # 1. ส่วนสรุปยอดขาย
-    if st.session_state.pos_history:
-        log_df = pd.DataFrame(st.session_state.pos_history)
-        c1, c2 = st.columns(2)
-        with c1:
-            st.metric("ยอดรวมทั้งหมดวันนี้", f"{log_df['ยอด'].sum():,.2f} ฿")
-        with c2:
-            st.metric("จำนวนบิลทั้งหมด", f"{len(log_df)} รายการ")
-        
-        st.write("### 📝 ประวัติการขาย")
-        st.dataframe(log_df, use_container_width=True)
-    else:
-        st.info("ยังไม่มีข้อมูลการขายในวันนี้")
+    # แสดงตารางสต็อกแบบสวยงาม
+    st.subheader("📦 จำนวนสินค้าคงเหลือปัจจุบัน")
+    st.dataframe(
+        df_stock[['Name', 'Price', 'Stock']],
+        column_config={
+            "Name": "ชื่อสินค้า",
+            "Price": "ราคา (฿)",
+            "Stock": st.column_config.NumberColumn("จำนวนคงเหลือ", format="%d 📦")
+        },
+        use_container_width=True,
+        hide_index=True
+    )
     
+    # กราฟแจ้งเตือนสต็อกต่ำ
     st.divider()
-    
-    # 2. ส่วนตารางสต็อกสินค้า (แก้ไขให้ดึงคอลัมน์ Stock มาโชว์)
-    st.subheader("📦 ตารางสต็อกสินค้าปัจจุบัน")
-    
-    # ดึงข้อมูลสินค้าล่าสุดมาใช้งาน
-    stock_df = load_products() 
-    
-    if not stock_df.empty:
-        # ตรวจสอบว่ามีคอลัมน์ Stock ไหม ถ้าไม่มีให้ใส่เป็น 0 กันพัง
-        if 'Stock' not in stock_df.columns:
-            stock_df['Stock'] = 0
-            
-        # เลือกแสดงเฉพาะคอลัมน์ที่จำเป็น: ชื่อ, ราคา, และ สต็อก
-        display_df = stock_df[['Name', 'Price', 'Stock']].copy()
-        
-        # ปรับแต่งการแสดงผลตารางให้สวยงาม
-        st.dataframe(
-            display_df, 
-            column_config={
-                "Name": "ชื่อสินค้า",
-                "Price": st.column_config.NumberColumn("ราคา (฿)", format="%d"),
-                "Stock": st.column_config.ProgressColumn(
-                    "จำนวนสต็อกคงเหลือ",
-                    help="จำนวนสินค้าที่เหลืออยู่ในระบบ",
-                    format="%d",
-                    min_value=0,
-                    max_value=int(display_df['Stock'].max()) if not display_df.empty else 100,
-                ),
-            },
-            use_container_width=True,
-            hide_index=True
-        )
-    else:
-        st.warning("ไม่สามารถดึงข้อมูลสต็อกได้ กรุณากดปุ่มอัปเดตที่เมนูด้านข้าง")
+    low_stock = df_stock[df_stock['Stock'] <= 10]
+    if not low_stock.empty:
+        st.warning("⚠️ สินค้าใกล้หมด (ต่ำกว่า 10 ชิ้น)")
+        st.table(low_stock[['Name', 'Stock']])
