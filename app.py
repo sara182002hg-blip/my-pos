@@ -8,7 +8,7 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0El
 
 st.set_page_config(page_title="TAS PROFESSIONAL POS", layout="wide")
 
-# 2. CSS จัดการรูปภาพและตัวหนังสือ
+# 2. CSS จัดการ Layout ให้คงที่
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
@@ -17,27 +17,30 @@ st.markdown("""
         border-radius: 15px;
         border: 1px solid #333;
         padding: 10px;
-        margin-bottom: 10px;
+        margin-bottom: 5px;
         display: flex;
         flex-direction: column;
         align-items: center;
-        height: 300px;
+        height: 280px; /* ปรับความสูงให้กระชับขึ้น */
     }
     .img-box {
-        width: 100%; height: 160px;
+        width: 100%; height: 150px;
         background-color: white; border-radius: 10px;
         display: flex; align-items: center; justify-content: center;
-        overflow: hidden; margin-bottom: 10px;
+        overflow: hidden; margin-bottom: 8px;
     }
-    .img-box img { max-width: 95%; max-height: 95%; object-fit: contain; }
-    .p-name { color: white !important; font-weight: bold; text-align: center; height: 2.5em; overflow: hidden; }
-    .p-price { color: #f1c40f !important; font-weight: bold; font-size: 1.2em; }
-    .stButton > button { width: 100%; border-radius: 8px; font-weight: bold; }
+    .img-box img { max-width: 90%; max-height: 90%; object-fit: contain; }
+    .p-name { color: white !important; font-weight: bold; text-align: center; height: 2.4em; overflow: hidden; font-size: 0.95em; }
+    .p-price { color: #f1c40f !important; font-weight: bold; font-size: 1.1em; margin-bottom: 5px; }
+    .stButton > button { width: 100%; border-radius: 8px; font-weight: bold; transition: 0.3s; }
+    /* ปรับแต่ง Scrollbar ของตะกร้า */
+    .cart-container { max-height: 400px; overflow-y: auto; padding-right: 10px; }
     p, span, label, h1, h2, h3, div { color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
-@st.cache_data(ttl=1)
+# 3. ฟังก์ชันโหลดข้อมูล (เพิ่มระบบ Cache เพื่อความเร็ว)
+@st.cache_data(ttl=60)
 def load_products():
     try:
         df = pd.read_csv(SHEET_URL)
@@ -45,20 +48,22 @@ def load_products():
         return df
     except: return pd.DataFrame()
 
-# เตรียมระบบตะกร้าสินค้า
+# เตรียม Session State สำหรับตะกร้า
 if 'cart' not in st.session_state:
-    st.session_state.cart = {} # ใช้ชื่อสินค้าเป็น Key
+    st.session_state.cart = {}
 
 st.title("🏪 TAS PROFESSIONAL POS")
 
 df_products = load_products()
-col1, col2 = st.columns([3.5, 1.5])
+col_main, col_cart = st.columns([3.6, 1.4])
 
-with col1:
+# ส่วนแสดงสินค้า
+with col_main:
     if not df_products.empty:
         grid = st.columns(4)
         for i, row in df_products.iterrows():
             with grid[i % 4]:
+                # แสดง Card สินค้า
                 st.markdown(f"""
                     <div class="product-card">
                         <div class="img-box"><img src="{row['Image_URL']}"></div>
@@ -67,75 +72,74 @@ with col1:
                     </div>
                 """, unsafe_allow_html=True)
                 
-                # ปุ่มกดเพิ่มสินค้า (แก้ไขให้ทำงานร่วมกับ Dictionary)
+                # ปุ่มเลือก (ใช้การอัปเดต State โดยตรงเพื่อลดการหน่วง)
                 if st.button(f"➕ เลือก", key=f"add_{i}"):
-                    name = row['Name']
-                    price = row['Price']
+                    name, price = row['Name'], row['Price']
                     if name in st.session_state.cart:
                         st.session_state.cart[name]['qty'] += 1
                     else:
                         st.session_state.cart[name] = {'price': price, 'qty': 1}
-                    st.rerun()
+                    st.rerun() # รีรันเฉพาะเมื่อมีการเปลี่ยนแปลงจริง
     else:
-        st.info("กำลังโหลดสินค้า...")
+        st.info("กำลังโหลดข้อมูลสินค้า...")
 
-with col2:
-    st.subheader("🛒 ตะกร้าสินค้า")
+# ส่วนตะกร้าสินค้า
+with col_cart:
+    st.subheader("🛒 รายการสินค้า")
+    
     if st.session_state.cart:
         total = 0
         items_summary = []
         
-        # วนลูปแสดงรายการในตะกร้า
-        for name, info in list(st.session_state.cart.items()):
-            item_price_total = info['price'] * info['qty']
-            total += item_price_total
-            items_summary.append(f"{name} (x{info['qty']})")
-            
-            # แสดงแถวสินค้าและปุ่มลบ
-            c1, c2 = st.columns([3, 1])
-            with c1:
-                st.write(f"**{name}** x {info['qty']}")
-                st.caption(f"{item_price_total:,} ฿")
-            with c2:
-                if st.button("❌", key=f"remove_{name}"):
-                    st.session_state.cart[name]['qty'] -= 1
-                    if st.session_state.cart[name]['qty'] <= 0:
-                        del st.session_state.cart[name]
-                    st.rerun()
-            st.divider()
-            
-        st.markdown(f"### รวมทั้งหมด: :green[{total:,.2f}] บาท")
-        method = st.radio("การชำระเงิน:", ("เงินสด", "โอนเงิน"), horizontal=True)
+        # ใส่ Container เพื่อจัดการพื้นที่ตะกร้า
+        with st.container():
+            for name, info in list(st.session_state.cart.items()):
+                item_total = info['price'] * info['qty']
+                total += item_total
+                items_summary.append(f"{name} (x{info['qty']})")
+                
+                c1, c2 = st.columns([3, 1.2])
+                with c1:
+                    st.markdown(f"**{name}**")
+                    st.caption(f"{info['qty']} ชิ้น x {info['price']:,} ฿")
+                with c2:
+                    if st.button("❌", key=f"del_{name}"):
+                        st.session_state.cart[name]['qty'] -= 1
+                        if st.session_state.cart[name]['qty'] <= 0:
+                            del st.session_state.cart[name]
+                        st.rerun()
+                st.divider()
+
+        st.markdown(f"### รวม: :orange[{total:,.2f}] บาท")
+        method = st.radio("ชำระเงิน:", ("เงินสด", "โอนเงิน"), horizontal=True)
         
         if st.button("💰 ยืนยันการขาย", type="primary", use_container_width=True):
             bill_id = "B" + pd.Timestamp.now().strftime("%y%m%d%H%M%S")
-            # ยิงข้อมูลไป Google Sheets
             params = {
                 "bill_id": bill_id,
                 "items": ", ".join(items_summary),
                 "total": float(total),
                 "payment_type": method
             }
-            try:
-                requests.get(API_URL, params=params, timeout=0.1)
+            # ยิงข้อมูลออกไปทันที
+            try: requests.get(API_URL, params=params, timeout=0.1)
             except: pass
             
-            # บันทึกสถานะบิลล่าสุดและล้างตะกร้า
             st.session_state.last_bill = {"total": total, "type": method}
             st.session_state.cart = {}
             st.rerun()
 
-        if st.button("🗑️ ล้างตะกร้าทั้งหมด"):
+        if st.button("🗑️ ล้างตะกร้า"):
             st.session_state.cart = {}
             st.rerun()
+            
+    elif 'last_bill' in st.session_state and st.session_state.last_bill:
+        last = st.session_state.last_bill
+        st.success(f"บันทึกยอด {last['total']:,} ฿ สำเร็จ")
+        if "โอน" in last['type']:
+            st.image(f"https://promptpay.io/0945016189/{last['total']}.png")
+        if st.button("บิลถัดไป"):
+            st.session_state.last_bill = None
+            st.rerun()
     else:
-        if 'last_bill' in st.session_state and st.session_state.last_bill:
-            last = st.session_state.last_bill
-            st.success(f"บันทึกยอด {last['total']:,} ฿ เรียบร้อย!")
-            if "โอน" in last['type']:
-                st.image(f"https://promptpay.io/0945016189/{last['total']}.png")
-            if st.button("รับบิลใหม่"):
-                st.session_state.last_bill = None
-                st.rerun()
-        else:
-            st.write("ยังไม่มีสินค้าในตะกร้า")
+        st.write("ยังไม่มีสินค้า")
