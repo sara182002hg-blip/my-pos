@@ -23,6 +23,10 @@ df_products = load_products()
 if 'cart' not in st.session_state:
     st.session_state.cart = []
 
+# เพิ่มสถานะการแสดง QR Code หลังชำระเงิน
+if 'last_bill' not in st.session_state:
+    st.session_state.last_bill = None
+
 col1, col2 = st.columns([2, 1])
 
 with col1:
@@ -38,8 +42,6 @@ with col1:
                 if st.button(f"เลือก {name}\n{price}.-", key=f"p_{i}"):
                     st.session_state.cart.append({"Name": name, "Price": price})
                     st.rerun()
-    else:
-        st.warning("🔄 กำลังโหลดข้อมูลสินค้า...")
 
 with col2:
     st.subheader("🛒 ตะกร้าสินค้า")
@@ -49,33 +51,49 @@ with col2:
         total = sum(item['Price'] for item in st.session_state.cart)
         st.write(f"## ยอดรวม: {total:,.2f} บาท")
         
-        # --- เพิ่มส่วนเลือกวิธีชำระเงิน ---
         payment_method = st.radio("เลือกวิธีชำระเงิน:", ("เงินสด", "โอนเงิน (พร้อมเพย์)"), horizontal=True)
         
         if st.button("💰 ยืนยันการชำระเงิน", use_container_width=True, type="primary"):
+            # เตรียมข้อมูลส่ง
             payload = {
                 "bill_id": "BILL-" + pd.Timestamp.now().strftime("%H%M%S"),
                 "items": ", ".join(df_cart['Name'].tolist()),
                 "total": float(total),
-                "payment_type": payment_method # ส่งประเภทการจ่ายเงินไปด้วย
+                "payment_type": payment_method
             }
             
             try:
+                # ส่งข้อมูลไปบันทึก
                 requests.post(API_URL, json=payload)
-                st.success(f"✅ บันทึกยอดขาย ({payment_method}) สำเร็จ!")
                 
-                # ถ้าเลือก "โอนเงิน" ให้โชว์ QR Code
-                if payment_method == "โอนเงิน (พร้อมเพย์)":
-                    st.image(f"https://promptpay.io/0945016189/{total}.png", caption=f"สแกนจ่าย {total} บาท")
-                else:
-                    st.balloons() # ถ้าจ่ายเงินสดให้ขึ้นเอฟเฟกต์ฉลอง
+                # เก็บค่าเพื่อแสดงผลหลังรีเซ็ตตะกร้า
+                st.session_state.last_bill = {
+                    "total": total,
+                    "method": payment_method
+                }
                 
+                # ✅ รีเซ็ตตะกร้าทันที
                 st.session_state.cart = []
+                st.rerun() 
             except:
                 st.error("❌ บันทึกไม่สำเร็จ")
-        
+
         if st.button("❌ ล้างตะกร้า"):
             st.session_state.cart = []
             st.rerun()
     else:
-        st.info("กรุณาเลือกสินค้า")
+        # แสดงผลหลังจากรีเซ็ตตะกร้าแล้ว (เช่น โชว์ QR Code หรือข้อความสำเร็จ)
+        if st.session_state.last_bill:
+            last = st.session_state.last_bill
+            st.success(f"✅ ชำระเงิน ({last['method']}) เรียบร้อยแล้ว!")
+            
+            if last['method'] == "โอนเงิน (พร้อมเพย์)":
+                st.image(f"https://promptpay.io/0945016189/{last['total']}.png", caption=f"สแกนจ่าย {last['total']} บาท")
+            else:
+                st.balloons()
+            
+            if st.button("เริ่มบิลใหม่"):
+                st.session_state.last_bill = None
+                st.rerun()
+        else:
+            st.info("ตะกร้าว่างเปล่า เลือกสินค้าได้เลยครับ")
