@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 import requests
 
-# 1. ข้อมูลการเชื่อมต่อ
-# ลิงก์นี้จะบังคับให้ดึงข้อมูลจากไฟล์ Export โดยตรง ไม่ผ่านระบบ Publish ปกติ
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1XqL_8rB3vUa6I6N6_uLz7G_7fPjG0r_D-uB4fP5Y6X0/export?format=csv&gid=228640428"
+# 1. ข้อมูลการเชื่อมต่อ (เปลี่ยนเป็นลิงก์แบบ Direct Export)
+FILE_ID = "1XqL_8rB3vUa6I6N6_uLz7G_7fPjG0r_D-uB4fP5Y6X0"
+GID = "228640428"
+SHEET_URL = f"https://docs.google.com/spreadsheets/d/{FILE_ID}/export?format=csv&gid={GID}"
 
 st.set_page_config(page_title="TAS POS PROFESSIONAL", layout="wide")
 
@@ -146,6 +147,7 @@ else:
         )
     else:
         st.warning("ไม่สามารถโหลดสต็อกได้")
+
 
 
 
