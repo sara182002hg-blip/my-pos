@@ -57,7 +57,10 @@ with col2:
                     st.success("บันทึกยอดขายลง Google Sheets สำเร็จ!")
                     # สร้าง QR Code (จำลอง)
                     qr = segno.make_qr(f"https://promptpay.io/0812345678/{total}")
-                    st.image(qr.png_as_base64(scale=5), caption="สแกนจ่ายตรงนี้")
+                    import io
+                    img_buf = io.BytesIO()
+                    qr.save(img_buf, kind='png', scale=5)
+                    st.image(img_buf.getvalue(), caption="สแกนจ่ายตรงนี้")
                     st.session_state.cart = [] # ล้างตะกร้า
                 else:
                     st.error(f"การเชื่อมต่อมีปัญหา (Code: {res.status_code})")
@@ -69,3 +72,4 @@ with col2:
             st.rerun()
     else:
         st.write("ยังไม่มีสินค้าในตะกร้า")
+
