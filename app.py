@@ -4,7 +4,7 @@ import requests
 import segno
 
 # 1. ใส่ URL ที่ก๊อปปี้มาจาก Apps Script (รูปที่ 21) ตรงนี้
-API_URL = "https://script.google.com/macros/s/AKfycbxpP5bJFCWluMWWEY24xFEaTy5VllLKd4hRvDwj3Q2k2fcggqESea50rUz_zavgM1Bh/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbwkMzLiNpkRvMucLdQYapDJJyXNR6eVTTGqDoNC3lrH-dDJqTFZrcJLKQPCsDFa8qSU/exec"
 
 st.set_page_config(page_title="My POS with Images", layout="wide")
 
@@ -75,5 +75,6 @@ with col2:
             st.rerun()
     else:
         st.write("ยังไม่มีสินค้าในตะกร้า")
+
 
 
