@@ -4,7 +4,7 @@ import requests
 import segno
 
 # ใส่ URL ที่ก๊อปปี้มาจาก Apps Script ตรงนี้
-API_URL = "วาง_URL_เว็บแอป_ของคุณตรงนี้"
+API_URL = "https://script.google.com/macros/s/AKfycbxrTacD8Bes_H2WU_hfEAEbVZ61yOXbEMalb7frL_c8P751ZmbP7ZK23dWz1UrRVszj/exec"
 
 st.set_page_config(page_title="My POS with Images", layout="wide")
 
@@ -57,3 +57,4 @@ with col2:
                 st.session_state.cart = [] # ล้างตะกร้า
             else:
                 st.error("เกิดข้อผิดพลาดในการเชื่อมต่อ")
+
