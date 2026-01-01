@@ -1,0 +1,39 @@
+import streamlit as st
+import pandas as pd
+
+st.set_page_config(page_title="My POS System", layout="wide")
+
+# สร้างตัวแปรเก็บข้อมูลสินค้าจำลอง (ในอนาคตค่อยเชื่อม Google Sheets)
+if 'inventory' not in st.session_state:
+    st.session_state.inventory = pd.DataFrame([
+        {"รายการ": "กาแฟดำ", "ราคา": 50},
+        {"รายการ": "ชาเขียว", "ราคา": 55},
+        {"รายการ": "ขนมปัง", "ราคา": 25}
+    ])
+
+if 'cart' not in st.session_state:
+    st.session_state.cart = []
+
+st.title("🏪 ระบบขายหน้าร้าน (POS)")
+
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    st.subheader("เลือกสินค้า")
+    for index, row in st.session_state.inventory.iterrows():
+        if st.button(f"{row['รายการ']} ({row['ราคา']} บาท)"):
+            st.session_state.cart.append({"รายการ": row['รายการ'], "ราคา": row['ราคา']})
+            st.rerun()
+
+with col2:
+    st.subheader("ตะกร้าสินค้า")
+    if st.session_state.cart:
+        df_cart = pd.DataFrame(st.session_state.cart)
+        st.table(df_cart)
+        total = df_cart['ราคา'].sum()
+        st.write(f"### ยอดรวม: {total} บาท")
+        if st.button("ล้างตะกร้า"):
+            st.session_state.cart = []
+            st.rerun()
+    else:
+        st.write("ยังไม่มีสินค้าในตะกร้า")
