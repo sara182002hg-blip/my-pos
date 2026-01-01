@@ -1,73 +1,88 @@
 import streamlit as st
 import pandas as pd
-import requests
-from io import StringIO
 
-# 1. ลิงก์ใหม่ (Force CSV)
-# ผมใช้ลิงก์โดยตรงเพื่อให้ระบบไม่สับสน
-STOCK_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=228640428&single=true&output=csv"
-
+# 1. ตั้งค่าหน้าจอและลิงก์ข้อมูล
 st.set_page_config(page_title="TAS POS SYSTEM", layout="wide")
+URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=228640428&single=true&output=csv"
 
-# 2. ฟังก์ชันดึงข้อมูลแบบใหม่ (ข้ามระบบ Cache ทั้งหมด)
-def get_fresh_data():
+# 2. ฟังก์ชันโหลดข้อมูล (ไม่ใช้ Cache เพื่อให้เลขสต็อกเปลี่ยนทันที)
+def load_data():
     try:
-        # ใช้ requests ดึงข้อมูลดิบเพื่อความชัวร์
-        response = requests.get(STOCK_CSV_URL)
-        response.encoding = 'utf-8'
-        data = StringIO(response.text)
-        new_df = pd.read_csv(data)
-        
-        # จัดการชื่อคอลัมน์
-        new_df.columns = new_df.columns.str.strip()
-        new_df['Price'] = pd.to_numeric(new_df['Price'], errors='coerce').fillna(0)
-        new_df['Stock'] = pd.to_numeric(new_df['Stock'], errors='coerce').fillna(0).astype(int)
-        return new_df
-    except Exception as e:
-        st.error(f"Error: {e}")
+        df = pd.read_csv(URL)
+        df.columns = df.columns.str.strip()
+        df['Price'] = pd.to_numeric(df['Price'], errors='coerce').fillna(0)
+        df['Stock'] = pd.to_numeric(df['Stock'], errors='coerce').fillna(0).astype(int)
+        return df
+    except:
         return pd.DataFrame()
 
-# 3. โหลดข้อมูล
-df_pos = get_fresh_data()
+# 3. เตรียมตัวแปรระบบ
+if 'cart' not in st.session_state: st.session_state.cart = {}
+if 'bill' not in st.session_state: st.session_state.bill = None
 
-# 4. แสดงผลหน้าจอ
+df = load_data()
+
+# 4. หน้าจอหลัก
 st.title("🏪 TAS POS SYSTEM")
 
-# ถ้าดึงข้อมูลได้สำเร็จ
-if not df_pos.empty:
-    st.success("✅ เชื่อมต่อข้อมูลสำเร็จ!")
-    
-    # ตรวจสอบว่าในไฟล์มีข้อมูลจริงไหม
-    if len(df_pos) > 0:
-        c1, c2 = st.columns([3, 2])
-        
-        with c1:
-            st.subheader("📦 สินค้าพร้อมขาย")
-            grid = st.columns(3)
-            for i, row in df_pos.iterrows():
-                with grid[i % 3]:
-                    st.markdown(f"""
-                        <div style="background:#262730; border:1px solid #444; padding:15px; border-radius:10px; text-align:center;">
-                            <img src="{row['Image_URL']}" style="height:100px; width:100px; object-fit:contain; background:white; border-radius:8px;">
-                            <h4 style="margin:10px 0;">{row['Name']}</h4>
-                            <h3 style="color:#f1c40f;">{row['Price']:,} ฿</h3>
-                            <p style="color:#2ecc71;">สต็อกคงเหลือ: {row['Stock']}</p>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    if row['Stock'] > 0:
-                        st.button(f"เลือก {row['Name']}", key=f"id_{i}")
-                    else:
-                        st.button("สินค้าหมด", key=f"id_{i}", disabled=True)
-        
-        with c2:
-            st.subheader("🛒 สรุปรายการ")
-            st.info("ระบบกำลังเตรียมความพร้อม...")
-            
-    else:
-        st.warning("ดึงข้อมูลได้แล้ว แต่ไม่พบรายการสินค้าในชีต Stock (ลองเช็คแถวที่ 2 เป็นต้นไป)")
+if df.empty:
+    st.error("❌ ไม่สามารถดึงข้อมูลได้ กรุณาเช็ค Google Sheets")
 else:
-    st.error("❌ ไม่สามารถดึงข้อมูลได้ กรุณากดปุ่ม Reboot ในหน้า Manage App")
+    col1, col2 = st.columns([3, 2])
+    
+    with col1:
+        st.subheader("📦 รายการสินค้า")
+        grid = st.columns(3)
+        for i, row in df.iterrows():
+            with grid[i % 3]:
+                # แสดงกล่องสินค้าสวยงาม
+                st.markdown(f"""
+                    <div style="background:#1a1c24; border:1px solid #444; padding:15px; border-radius:10px; text-align:center; margin-bottom:10px;">
+                        <img src="{row['Image_URL']}" style="height:100px; width:100px; object-fit:contain; background:white; border-radius:8px;">
+                        <div style="font-weight:bold; color:white; margin:10px 0;">{row['Name']}</div>
+                        <div style="color:#f1c40f; font-size:1.3em; font-weight:bold;">{row['Price']:,} ฿</div>
+                        <div style="color:{'#2ecc71' if row['Stock'] > 0 else '#e74c3c'};">คงเหลือ: {row['Stock']}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                if row['Stock'] > 0:
+                    if st.button(f"เลือก {row['Name']}", key=f"btn_{i}", use_container_width=True):
+                        name = row['Name']
+                        if name in st.session_state.cart:
+                            st.session_state.cart[name]['qty'] += 1
+                        else:
+                            st.session_state.cart[name] = {'price': row['Price'], 'qty': 1}
+                        st.rerun()
+                else:
+                    st.button("สินค้าหมด", key=f"btn_{i}", disabled=True, use_container_width=True)
 
-# ปุ่มรีเซ็ตด่วน
-if st.sidebar.button("🔄 บังคับโหลดใหม่"):
+    with col2:
+        st.subheader("🛒 ตะกร้าสินค้า")
+        if st.session_state.cart:
+            total = 0
+            for n, item in list(st.session_state.cart.items()):
+                sub = item['price'] * item['qty']
+                total += sub
+                c1, c2 = st.columns([4, 1])
+                c1.write(f"**{n}** x {item['qty']} ({sub:,} ฿)")
+                if c2.button("❌", key=f"del_{n}"):
+                    del st.session_state.cart[n]
+                    st.rerun()
+            st.divider()
+            st.markdown(f"## รวม: :orange[{total:,}] ฿")
+            if st.button("✅ ยืนยันชำระเงิน", type="primary", use_container_width=True):
+                st.session_state.bill = total
+                st.session_state.cart = {}
+                st.rerun()
+        elif st.session_state.bill:
+            st.success(f"ชำระเงินเรียบร้อยยอด {st.session_state.bill:,} ฿")
+            if st.button("เปิดบิลใหม่"):
+                st.session_state.bill = None
+                st.rerun()
+        else:
+            st.info("กรุณาเลือกสินค้าจากด้านซ้าย")
+
+# เมนูเสริมด้านข้าง
+st.sidebar.title("⚙️ ตั้งค่า")
+if st.sidebar.button("🔄 รีโหลดสต็อก"):
     st.rerun()
