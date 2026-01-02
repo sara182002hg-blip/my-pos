@@ -14,21 +14,14 @@ URL_SUMMARY = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycbySel8Dxd6abzj7-JbYtaAgH3saKHBkeGsl47fpfUe293MmVwZM_Bx2K4CthYKUI4Ks/exec"
 MY_PROMPTPAY = "0945016189" 
 
-st.set_page_config(page_title="TAS POS Stable Pro", layout="wide")
+st.set_page_config(page_title="TAS POS Stable V10", layout="wide")
 
-# CSS ปรับแต่งรูปภาพให้เท่ากัน
-st.markdown("""
-    <style>
-    [data-testid="stImage"] img {
-        height: 180px;
-        object-fit: contain;
-        background-color: #f9f9f9;
-        border-radius: 5px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# CSS บังคับรูปเท่ากัน
+st.markdown("""<style>
+    [data-testid="stImage"] img { height: 180px; object-fit: contain; background: #f9f9f9; border-radius: 5px; }
+    @media print { .no-print { display: none !important; } }
+</style>""", unsafe_allow_html=True)
 
-# ฟังก์ชันโหลดข้อมูลแบบเร็ว (Cache 2 นาที)
 @st.cache_data(ttl=120)
 def fetch_data(url):
     try:
@@ -37,8 +30,7 @@ def fetch_data(url):
         df = pd.read_csv(StringIO(res.text))
         df.columns = df.columns.str.strip()
         return df.dropna(how='all')
-    except:
-        return pd.DataFrame()
+    except: return pd.DataFrame()
 
 def get_col(df, names):
     for c in df.columns:
@@ -53,7 +45,6 @@ menu = st.sidebar.radio("🏬 เมนูระบบ", ["🛒 ขายสิ�
 if menu == "🛒 ขายสินค้า":
     df_p = fetch_data(URL_PRODUCTS)
     df_s = fetch_data(URL_STOCK)
-    
     col_main, col_right = st.columns([2.2, 1.8])
     
     with col_main:
@@ -62,47 +53,37 @@ if menu == "🛒 ขายสินค้า":
             c_name = get_col(df_p, ["สินค้า", "name"])
             c_price = get_col(df_p, ["ราคา", "price"])
             c_img = get_col(df_p, ["รูป", "image", "url"])
-            
             grid = st.columns(3)
             for i, row in df_p.iterrows():
-                p_name = str(row[c_name])
-                p_price = float(row[c_price])
+                p_name, p_price = str(row[c_name]), float(row[c_price])
                 p_img = str(row[c_img]) if c_img and pd.notna(row[c_img]) else ""
-                
-                s_name_col = get_col(df_s, ["สินค้า", "name"])
-                s_qty_col = get_col(df_s, ["คงเหลือ", "stock"])
-                s_match = df_s[df_s[s_name_col] == p_name] if not df_s.empty else pd.DataFrame()
-                stock = int(s_match.iloc[0][s_qty_col]) if not s_match.empty else 0
-                
+                s_match = df_s[df_s.iloc[:,0] == p_name] if not df_s.empty else pd.DataFrame()
+                stock = int(s_match.iloc[0,1]) if not s_match.empty else 0
                 with grid[i % 3]:
                     with st.container(border=True):
-                        if p_img.startswith("http"): st.image(p_img, use_container_width=True)
-                        else: st.markdown("<div style='height:180px; display:flex; align-items:center; justify-content:center; background:#eee;'>📷 ไม่มีรูป</div>", unsafe_allow_html=True)
-                        
-                        st.write(f"**{p_name}**")
-                        st.write(f"### {p_price:,.0f} ฿")
-                        qty_in_cart = st.session_state.cart.get(p_name, {}).get('qty', 0)
-                        if stock > qty_in_cart:
+                        st.image(p_img if p_img.startswith("http") else "https://via.placeholder.com/150", use_container_width=True)
+                        st.write(f"**{p_name}**\n\n### {p_price:,.0f} ฿")
+                        if stock > st.session_state.cart.get(p_name, {}).get('qty', 0):
                             if st.button(f"➕ เพิ่ม", key=f"add_{i}", use_container_width=True):
                                 st.session_state.cart[p_name] = st.session_state.cart.get(p_name, {'price': p_price, 'qty': 0})
                                 st.session_state.cart[p_name]['qty'] += 1
                                 st.rerun()
-                        else: st.button("❌ หมด", disabled=True, use_container_width=True, key=f"sold_{i}")
+                        else: st.button("❌ หมด", disabled=True, use_container_width=True)
 
     with col_right:
         if st.session_state.receipt:
             r = st.session_state.receipt
-            st.success("ชำระเงินเรียบร้อย")
             qr_html = f'<div style="text-align:center;"><img src="https://promptpay.io/{MY_PROMPTPAY}/{r["total"]}.png" width="180"></div>' if r['method'] == "📱 PromptPay" else ""
-            st.markdown(f"""<div id="receipt-print" style="background:white; color:black; padding:15px; border:2px solid #333; font-family:monospace; border-radius:5px;">
-                <h3 style="text-align:center;">TAS POS</h3><hr>
+            receipt_html = f"""<div style="background:white; color:black; padding:20px; border:2px solid #333; font-family:monospace; border-radius:5px;">
+                <h3 style="text-align:center;">TAS POS RECEIPT</h3><hr>
                 {''.join([f'<div style="display:flex;justify-content:space-between;"><span>{n} x{i["qty"]}</span><span>{i["price"]*i["qty"]:,.0f}</span></div>' for n,i in r['items'].items()])}
-                <hr><div style="display:flex;justify-content:space-between;font-size:18px;font-weight:bold;"><span>รวมยอด</span><span>{r['total']:,.0f} ฿</span></div>
-                <p style="text-align:center; margin-top:10px;">วิธีชำระ: {r['method']}</p>{qr_html}</div>""", unsafe_allow_html=True)
+                <hr><div style="display:flex;justify-content:space-between;font-size:18px;font-weight:bold;"><span>ยอดรวมสุทธิ</span><span>{r['total']:,.0f} ฿</span></div>
+                <p style="text-align:center; margin-top:10px;">ชำระโดย: {r['method']}</p>{qr_html}</div>"""
+            st.markdown(receipt_html, unsafe_allow_html=True)
             
-            # ปุ่มปริ้นใบเสร็จ
+            # ปุ่มพิมพ์ที่ปรับปรุงใหม่
             if st.button("🖨️ พิมพ์ใบเสร็จ", use_container_width=True):
-                st.components.v1.html("<script>window.print();</script>", height=0)
+                st.components.v1.html(f"<script>var prtContent = '{receipt_html}'; var WinPrint = window.open('', '', 'left=0,top=0,width=800,height=900,toolbar=0,scrollbars=0,status=0'); WinPrint.document.write(prtContent); WinPrint.document.close(); WinPrint.focus(); WinPrint.print(); WinPrint.close();</script>", height=0)
 
             if st.button("🔄 เริ่มการขายใหม่", type="primary", use_container_width=True):
                 st.session_state.receipt = None
@@ -115,49 +96,43 @@ if menu == "🛒 ขายสินค้า":
                 c1.write(f"**{n}** x{i['qty']}")
                 if c2.button("🗑️", key=f"del_{n}"): del st.session_state.cart[n]; st.rerun()
             if total > 0:
-                st.divider()
-                method = st.radio("เลือกการชำระเงิน", ["💵 เงินสด", "📱 PromptPay"], horizontal=True)
+                method = st.radio("วิธีชำระเงิน", ["💵 เงินสด", "📱 PromptPay"], horizontal=True)
                 if st.button("🚀 ยืนยันชำระเงิน", type="primary", use_container_width=True):
                     try: requests.post(SCRIPT_URL, json={"action":"checkout","bill_id":f"B{int(time.time())}","summary":", ".join([f"{k}({v['qty']})" for k,v in st.session_state.cart.items()]),"total":total,"method":method}, timeout=1)
                     except: pass
                     st.session_state.receipt = {"items": dict(st.session_state.cart), "total": total, "method": method}
                     st.session_state.cart = {}
-                    st.cache_data.clear()
+                    st.cache_data.clear() # ล้าง Cache ทันทีเพื่อให้รายงานยอดขายอัปเดต
                     st.rerun()
 
 elif menu == "📊 รายงานยอดขาย":
     st.title("📊 รายงานยอดขาย")
     df_sales = fetch_data(URL_SALES)
     df_sum = fetch_data(URL_SUMMARY)
-    
     if not df_sales.empty:
         c_date = get_col(df_sales, ["วัน", "time", "date"])
         c_total = get_col(df_sales, ["ยอด", "total", "รวม"])
         
-        # ปรับปรุงระบบวันที่ให้แม่นยำขึ้น
+        # ปรับ Logic การกรองวันที่ให้แม่นยำขึ้น
         df_sales[c_date] = pd.to_datetime(df_sales[c_date], dayfirst=True, errors='coerce')
-        df_sales[c_total] = pd.to_numeric(df_sales[c_total], errors='coerce').fillna(0)
+        now_date = datetime.now().date()
+        df_today = df_sales[df_sales[c_date].dt.date == now_date]
         
-        now = datetime.now()
-        # กรองข้อมูลวันนี้ (เปรียบเทียบเฉพาะส่วนของวันที่)
-        df_today = df_sales[df_sales[c_date].dt.date == now.date()]
-        
-        today_str = now.strftime("%d/%m/%Y")
+        today_str = datetime.now().strftime("%d/%m/%Y")
         is_cut = not df_sum[df_sum.iloc[:, 0] == today_str].empty if not df_sum.empty else False
         
         m1, m2, m3 = st.columns(3)
         m1.metric("ยอดขายวันนี้", f"{0 if is_cut else df_today[c_total].sum():,.0f} ฿")
-        m2.metric("รายสัปดาห์", f"{df_sales[df_sales[c_date] >= (now - timedelta(days=7))][c_total].sum():,.0f} ฿")
-        m3.metric("รายเดือน", f"{df_sales[df_sales[c_date].dt.month == now.month][c_total].sum():,.0f} ฿")
+        m2.metric("รายสัปดาห์", f"{df_sales[df_sales[c_date] >= (datetime.now() - timedelta(days=7))][c_total].sum():,.0f} ฿")
+        m3.metric("รายเดือน", f"{df_sales[df_sales[c_date].dt.month == datetime.now().month][c_total].sum():,.0f} ฿")
         
         if st.button("📝 บันทึกสรุปยอดรายวัน", type="primary", disabled=is_cut):
             try:
                 requests.post(SCRIPT_URL, json={"action":"save_summary","date":today_str,"total":float(df_today[c_total].sum()),"bills":int(len(df_today))}, timeout=5)
-                st.success("บันทึกสรุปยอดสำเร็จ!")
+                st.success("บันทึกสำเร็จ!")
                 st.cache_data.clear()
                 time.sleep(1); st.rerun()
             except: st.error("บันทึกไม่สำเร็จ")
-            
         st.dataframe(df_sales.iloc[::-1], use_container_width=True)
 
 elif menu == "📦 ตรวจสอบสต็อก":
