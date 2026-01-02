@@ -7,7 +7,7 @@ from datetime import datetime
 from io import StringIO
 from fpdf import FPDF
 
-# --- 1. ตั้งค่าการเชื่อมต่อ (คงเดิมตามระบบของคุณ) ---
+# --- 1. ตั้งค่าการเชื่อมต่อ (คงเดิม) ---
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycby8f3q4R9it3uGxTpcMlXR_nfsV1c9bJPXy3hJahIVZyAul1IHpY6JpsY5iGrg3_Czp/exec"
 STOCK_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=228640428&single=true&output=csv"
 SALES_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=0&single=true&output=csv"
@@ -20,11 +20,11 @@ def load_data(url):
         res = requests.get(f"{url}&t={int(time.time())}", timeout=10)
         res.encoding = 'utf-8' 
         df = pd.read_csv(StringIO(res.text))
-        df.columns = df.columns.str.strip()
+        df.columns = df.columns.str.strip() # ล้างหัวตาราง
         return df
     except: return pd.DataFrame()
 
-# ✅ ฟังก์ชันสร้าง PDF: แก้ให้พิมพ์ "Items" แทนชื่อไทยเพื่อกันระบบพัง
+# ฟังก์ชัน PDF (เลี่ยงภาษาไทยเพื่อความเสถียร)
 def generate_receipt_pdf(cart, total, method, bill_id):
     try:
         pdf = FPDF(format=(80, 150))
@@ -35,19 +35,15 @@ def generate_receipt_pdf(cart, total, method, bill_id):
         pdf.cell(60, 5, txt=f"Bill ID: {bill_id}", ln=True)
         pdf.cell(60, 5, txt=f"Date: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=True)
         pdf.cell(60, 5, txt="-" * 35, ln=True)
-        
-        # วนลูปรายการ: ใน PDF จะใช้คำว่า "Product" เพื่อเลี่ยงภาษาไทยที่ทำให้ Error
         for i, (name, item) in enumerate(cart.items()):
             pdf.cell(40, 7, txt=f"Item {i+1} x{item['qty']}")
             pdf.cell(20, 7, txt=f"{item['price']*item['qty']:,}", ln=True, align='R')
-            
         pdf.cell(60, 5, txt="-" * 35, ln=True)
         pdf.cell(30, 10, txt="TOTAL:")
         pdf.cell(30, 10, txt=f"{total:,} THB", ln=True, align='R')
         return pdf.output()
     except: return None
 
-# --- ตรรกะระบบคงเดิมทั้งหมด ---
 if 'cart' not in st.session_state: st.session_state.cart = {}
 if 'pdf_receipt' not in st.session_state: st.session_state.pdf_receipt = None
 
@@ -86,28 +82,22 @@ if menu == "🛒 ขายสินค้า (POS)":
                     st.rerun()
                 if p.button("➕", key=f"p_{name}"):
                     st.session_state.cart[name]['qty'] += 1; st.rerun()
-            
             if st.button("🗑️ ล้างตะกร้าทั้งหมด", use_container_width=True):
                 st.session_state.cart = {}; st.rerun()
-            
             st.header(f"ยอดรวม: {total_sum:,} ฿")
             method = st.radio("ช่องทางชำระเงิน", ["เงินสด", "QR Code"], horizontal=True)
             if method == "QR Code":
                 st.image(f"https://promptpay.io/0945016189/{total_sum}.png", width=220)
-            
             if st.button("✅ ยืนยันการขาย (บันทึกข้อมูล)", use_container_width=True, type="primary"):
                 bill_id = f"B{int(time.time())}"
-                # บันทึกเป็นภาษาไทยลง Google Sheets ได้ปกติ (เพราะใช้ JSON/Request)
                 summary = ", ".join([f"{n}({i['qty']})" for n, i in st.session_state.cart.items()])
                 payload = {"action": "checkout", "bill_id": bill_id, "summary": summary, "total": total_sum, "method": method}
                 try:
-                    # สร้าง PDF แบบเลี่ยงตัวอักษรไทย
                     st.session_state.pdf_receipt = generate_receipt_pdf(st.session_state.cart, total_sum, method, bill_id)
                     res = requests.post(SCRIPT_URL, json=payload, timeout=15)
                     if res.status_code == 200: st.success(f"บันทึกสำเร็จ!")
                     else: st.error("บันทึกไม่สำเร็จ ตรวจสอบอินเทอร์เน็ต")
                 except Exception as e: st.error(f"ระบบขัดข้อง")
-            
             if st.session_state.pdf_receipt:
                 st.download_button("🖨️ ดาวน์โหลดใบเสร็จ", data=bytes(st.session_state.pdf_receipt), file_name=f"Bill_{bill_id}.pdf", use_container_width=True)
         else: st.info("ตะกร้าว่าง")
@@ -116,11 +106,22 @@ elif menu == "📊 สรุปยอด & กำไร":
     st.title("📊 สรุปผลการขาย")
     df_sales = load_data(SALES_URL)
     if not df_sales.empty:
-        col_name = 'Total_Amount' if 'Total_Amount' in df_sales.columns else df_sales.columns[3]
-        total_val = pd.to_numeric(df_sales[col_name], errors='coerce').sum()
-        st.metric("ยอดขายรวม", f"{total_val:,} ฿")
-        st.dataframe(df_sales.tail(15), use_container_width=True)
-    else: st.info("ไม่มีข้อมูล")
+        try:
+            # ✅ แก้ไข IndexError: ตรวจสอบจำนวนคอลัมน์ก่อนเข้าถึง
+            if len(df_sales.columns) >= 4:
+                # พยายามหายอดรวมจากชื่อคอลัมน์ ถ้าไม่เจอให้ใช้ตำแหน่งที่ 4 (Index 3)
+                target_col = 'Total_Amount' if 'Total_Amount' in df_sales.columns else df_sales.columns[3]
+                total_val = pd.to_numeric(df_sales[target_col], errors='coerce').sum()
+                st.metric("ยอดขายรวมทั้งหมด", f"{total_val:,.2f} ฿")
+            else:
+                st.warning("โครงสร้างตารางใน Sheets ไม่ถูกต้อง (มีคอลัมน์น้อยเกินไป)")
+            
+            st.subheader("📋 รายการล่าสุด")
+            st.dataframe(df_sales.tail(20), use_container_width=True)
+        except Exception as e:
+            st.error(f"ไม่สามารถคำนวณยอดรวมได้: {e}")
+            st.dataframe(df_sales) # แสดงตารางดิบแทนถ้าคำนวณไม่ได้
+    else: st.info("ยังไม่มีข้อมูลในระบบ")
 
 elif menu == "📦 สต็อกสินค้า":
     st.title("📦 หลังบ้าน (สต็อก)")
