@@ -4,13 +4,13 @@ import requests
 import json
 import time
 from datetime import datetime
-from io import StringIO, BytesIO
+from io import StringIO
 from fpdf import FPDF
 
 # --- 1. ตั้งค่าการเชื่อมต่อ ---
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycby8f3q4R9it3uGxTpcMlXR_nfsV1c9bJPXy3hJahIVZyAul1IHpY6JpsY5iGrg3_Czp/exec"
 STOCK_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=228640428&single=true&output=csv"
-# ✅ แก้ไขให้ดึงจากหน้า Sales (gid=0) เพื่อแก้ปัญหาไม่พบ Total_Amount
+# ✅ ใช้ gid=0 สำหรับหน้า Sales
 SALES_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=0&single=true&output=csv"
 
 st.set_page_config(page_title="TAS POS Ultimate", layout="wide")
@@ -21,14 +21,14 @@ def load_data(url):
         res = requests.get(f"{url}&t={int(time.time())}", timeout=10)
         res.encoding = 'utf-8' 
         df = pd.read_csv(StringIO(res.text))
-        df.columns = df.columns.str.strip()
+        df.columns = df.columns.str.strip() 
         return df
     except: return pd.DataFrame()
 
-# ✅ ฟังก์ชันสร้าง PDF พร้อม QR Code
+# ✅ ฟังก์ชัน PDF: แก้ไข Error 'bytearray' และเพิ่ม QR Code
 def generate_receipt_pdf(cart, total, method, bill_id):
     try:
-        pdf = FPDF(format=(80, 200)) # เพิ่มความยาวกระดาษรองรับ QR
+        pdf = FPDF(format=(80, 200))
         pdf.add_page()
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(60, 10, txt="TAS POS SYSTEM", ln=True, align='C')
@@ -46,16 +46,16 @@ def generate_receipt_pdf(cart, total, method, bill_id):
         pdf.cell(30, 10, txt="TOTAL:")
         pdf.cell(30, 10, txt=f"{total:,} THB", ln=True, align='R')
         
-        # ✅ เพิ่ม QR Code ลงในสลิป (ถ้าจ่ายด้วย QR Code)
         if method == "QR Code":
             qr_url = f"https://promptpay.io/0945016189/{total}.png"
             pdf.ln(5)
-            pdf.cell(60, 5, txt="Scan to Pay (PromptPay)", ln=True, align='C')
-            pdf.image(qr_url, x=15, w=50) # วางรูป QR
+            pdf.cell(60, 5, txt="Scan to Pay", ln=True, align='C')
+            pdf.image(qr_url, x=15, w=50) 
             
-        return pdf.output(dest='S').encode('latin-1')
+        # ส่งค่าออกแบบ bytes โดยตรงเพื่อเลี่ยง Error .encode()
+        return bytes(pdf.output(dest='S')) 
     except Exception as e: 
-        st.error(f"PDF Error: {e}")
+        st.error(f"PDF Error: {str(e)}")
         return None
 
 if 'cart' not in st.session_state: st.session_state.cart = {}
@@ -107,7 +107,6 @@ if menu == "🛒 ขายสินค้า (POS)":
                 summary = ", ".join([f"{n}({i['qty']})" for n, i in st.session_state.cart.items()])
                 payload = {"action": "checkout", "bill_id": bill_id, "summary": summary, "total": total_sum, "method": method}
                 try:
-                    # บันทึกข้อมูลลง Sheets
                     res = requests.post(SCRIPT_URL, json=payload, timeout=15)
                     if res.status_code == 200: 
                         st.success(f"บันทึกสำเร็จ!")
@@ -123,8 +122,8 @@ elif menu == "📊 สรุปยอด & กำไร":
     df_sales = load_data(SALES_URL)
     if not df_sales.empty:
         try:
-            # ✅ ค้นหาคอลัมน์ยอดรวมให้กว้างขึ้น เพื่อป้องกัน IndexError
-            target_cols = [c for c in df_sales.columns if any(kw in c for kw in ['Total', 'ยอดรวม', 'Amount'])]
+            # ✅ ปรับการค้นหาคอลัมน์ให้ตรงกับ "ยอดรวม" ในชีตของคุณ
+            target_cols = [c for c in df_sales.columns if 'ยอดรวม' in c or 'Total' in c]
             if target_cols:
                 col_name = target_cols[0]
                 total_val = pd.to_numeric(df_sales[col_name], errors='coerce').fillna(0).sum()
@@ -132,8 +131,8 @@ elif menu == "📊 สรุปยอด & กำไร":
                 st.subheader("📋 รายการล่าสุด")
                 st.dataframe(df_sales.iloc[::-1], use_container_width=True)
             else:
-                st.warning("ไม่พบคอลัมน์ยอดเงินในแผ่นชีต Sales")
-                st.dataframe(df_sales)
+                st.error("ไม่พบคอลัมน์ 'ยอดรวม' กรุณาตรวจสอบหัวตารางในหน้า Sales")
+                st.dataframe(df_sales.head())
         except Exception as e: st.error(f"Error: {e}")
     else: st.info("ยังไม่มีข้อมูลในแผ่น Sales")
 
