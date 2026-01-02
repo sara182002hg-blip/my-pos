@@ -6,32 +6,32 @@ from datetime import datetime
 from io import StringIO
 from fpdf import FPDF
 
-# --- 1. อัปเดตลิงก์ GID ให้ตรงกับชีตจริงของคุณ ---
-# หน้า Menu (สินค้า) = gid=1258507712
+# --- เชื่อมต่อ GID ตามชีตจริงของคุณ ---
+# หน้า "เมนู" (สินค้า) = gid=1258507712
 CSV_PRODUCTS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=1258507712&single=true&output=csv"
-# หน้า Sales (ยอดขาย) = gid=952949333
+# หน้า "Sales" (ยอดขาย) = gid=952949333
 CSV_SALES = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=952949333&single=true&output=csv"
-# หน้า Stock (สต็อก) = gid=228640428
+# หน้า "Stock" (สต็อก) = gid=228640428
 CSV_STOCK = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=228640428&single=true&output=csv"
 
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycby8f3q4R9it3uGxTpcMlXR_nfsV1c9bJPXy3hJahIVZyAul1IHpY6JpsY5iGrg3_Czp/exec"
 
 st.set_page_config(page_title="TAS POS SYSTEM", layout="wide")
 
-# ✅ ฟังก์ชันโหลดข้อมูลและป้องกันแถวว่าง
+# ✅ โหลดข้อมูลและกรองแถวว่างทิ้งเพื่อป้องกัน TypeError
 def load_data(url):
     try:
         res = requests.get(f"{url}&t={int(time.time())}", timeout=10)
         res.encoding = 'utf-8'
         df = pd.read_csv(StringIO(res.text))
         df.columns = df.columns.str.strip()
-        # ตัดแถวที่ไม่มีข้อมูลสำคัญออกเพื่อกัน Error
+        # กรองเฉพาะแถวที่มีชื่อสินค้าจริงๆ เพื่อไม่ให้แอปแสดงหน้าว่าง
         df = df.dropna(subset=['Name']).reset_index(drop=True)
         return df
     except:
         return pd.DataFrame()
 
-# ✅ ระบบใบเสร็จแบบ Safe Mode
+# ✅ ระบบใบเสร็จ
 def generate_pdf(cart, total, bill_id):
     try:
         pdf = FPDF(format=(80, 150))
@@ -69,13 +69,13 @@ if menu == "🛒 ขายสินค้า":
             for i, row in df_p.iterrows():
                 with grid[i % 3]:
                     with st.container(border=True):
-                        # ✅ แสดงรูปภาพสูง 200px พร้อมเช็ค Error
+                        # ✅ แสดงรูปภาพสูง 200px พร้อมดักจับ Error
                         try:
                             img = str(row.get('Image_URL', ""))
                             if img.startswith("http"):
                                 st.image(img, height=200, use_container_width=True)
                             else: st.info("ไม่มีรูป")
-                        except: st.error("รูปพัง")
+                        except: st.error("ลิงก์รูปพัง")
                         
                         name = row.get('Name', 'N/A')
                         price = row.get('Price', 0)
@@ -87,7 +87,7 @@ if menu == "🛒 ขายสินค้า":
                             st.session_state.cart[name]['qty'] += 1
                             st.rerun()
         else:
-            st.warning("ไม่พบข้อมูลสินค้าในแผ่นงาน 'Menu' กรุณาตรวจสอบลิงก์ชีต")
+            st.warning("⚠️ ไม่พบข้อมูลในหน้า 'เมนู' กรุณาตรวจสอบลิงก์ชีต")
 
     with col_r:
         st.subheader("🛒 ตะกร้า")
@@ -129,12 +129,14 @@ if menu == "🛒 ขายสินค้า":
                 st.rerun()
 
 elif menu == "📊 ยอดขาย":
-    st.title("📊 ยอดขายรวม")
+    st.title("📊 สรุปยอดขาย") #
     df = load_data(CSV_SALES)
     if not df.empty:
         col = next((c for c in df.columns if any(x in c for x in ['Total', 'รวม'])), df.columns[-1])
-        st.metric("ยอดรวมทั้งหมด", f"{pd.to_numeric(df[col], errors='coerce').sum():,.2f} ฿")
+        st.metric("ยอดรวมสะสม", f"{pd.to_numeric(df[col], errors='coerce').sum():,.2f} ฿")
         st.dataframe(df.iloc[::-1], use_container_width=True)
+    else:
+        st.info("ยังไม่มีข้อมูลการขายในขณะนี้")
 
 elif menu == "📦 สต็อก":
     st.title("📦 สต็อกปัจจุบัน")
