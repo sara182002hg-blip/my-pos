@@ -68,15 +68,14 @@ if menu == "🛒 ขายสินค้า":
                         else:
                             st.button("❌ สินค้าหมด / ไม่พอ", key=f"out_{i}", use_container_width=True, disabled=True)
 
-  with col_right:
+with col_right:
         if st.session_state.receipt:
             r = st.session_state.receipt
             st.subheader("📄 ใบเสร็จรับเงิน")
             with st.container(border=True):
-                # ส่วนแสดงผลใบเสร็จ (ปรับแก้เพื่อให้ QR Code ฝังข้างในได้)
+                # เตรียมส่วน QR Code สำหรับ PromptPay
                 qr_html = ""
                 if r['method'] == "📱 PromptPay":
-                    # สร้างลิงก์ QR Code
                     qr_url = f"https://promptpay.io/{MY_PROMPTPAY}/{r['total']}.png"
                     qr_html = f"""
                     <div style="text-align: center; margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
@@ -84,7 +83,8 @@ if menu == "🛒 ขายสินค้า":
                         <p style="font-size: 12px; color: #666; margin-top: 5px;">สแกนจ่ายเบอร์ {MY_PROMPTPAY}</p>
                     </div>
                     """
-
+                
+                # แสดงผลใบเสร็จดีไซน์ Professional
                 st.markdown(f"""
                 <div style="background-color: white; color: black; padding: 30px; border-radius: 10px; font-family: 'Courier New', Courier, monospace; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                     <div style="text-align: center; margin-bottom: 20px;">
@@ -123,7 +123,8 @@ if menu == "🛒 ขายสินค้า":
                         if st.session_state.cart[name]['qty'] <= 0: del st.session_state.cart[name]
                         st.rerun()
                     if c3.button("➕", key=f"plus_{name}"):
-                        # เช็คสต็อกอีกรอบก่อนเพิ่มจำนวนในตะกร้า
+                        # ระบบเช็คสต็อกก่อนเพิ่มจำนวน
+                        df_s = load_data(URL_STOCK)
                         current_stock = df_s[df_s['Name'] == name].iloc[0]['Stock'] if not df_s.empty else 0
                         if item['qty'] < current_stock:
                             st.session_state.cart[name]['qty'] += 1
@@ -147,20 +148,3 @@ if menu == "🛒 ขายสินค้า":
                     
                     st.session_state.cart = {}
                     st.rerun()
-
-elif menu == "📊 ยอดขาย":
-    st.title("📊 รายงานยอดขาย")
-    df_sales = load_data(URL_SALES)
-    if not df_sales.empty:
-        st.dataframe(df_sales.iloc[::-1], use_container_width=True)
-    else:
-        st.warning("ยังไม่มีข้อมูลยอดขาย")
-
-elif menu == "📦 สต็อก":
-    st.title("📦 สต็อกสินค้าคงเหลือ")
-    df_stock = load_data(URL_STOCK)
-    if not df_stock.empty:
-        st.dataframe(df_stock, use_container_width=True)
-    else:
-        st.error("ไม่สามารถโหลดข้อมูลสต็อกได้")
-
