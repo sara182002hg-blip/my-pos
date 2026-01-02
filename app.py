@@ -51,31 +51,41 @@ if menu == "🛒 ขายสินค้า":
                             st.rerun()
 
     with col_right:
-        # --- ส่วนแสดงใบเสร็จดีไซน์ใหม่ ---
+# --- ส่วนแสดงใบเสร็จดีไซน์ใหม่ (แก้ไขส่วนเงินสด) ---
         if st.session_state.receipt:
             r = st.session_state.receipt
             st.subheader("📄 ใบเสร็จรับเงิน")
             with st.container(border=True):
+                # กำหนดตัวแปรสำหรับแสดง QR Code หรือไม่
+                qr_section = ""
+                if r['method'] == "📱 PromptPay":
+                    qr_section = f"""
+                    <div style="text-align: center; margin-top: 20px;">
+                        <img src="https://promptpay.io/{MY_PROMPTPAY}/{r['total']}.png" width="220" style="border: 1px solid #ddd; padding: 5px;"/>
+                        <p style="font-size: 11px; margin-top: 8px; color: #888;">สแกนจ่าย: {MY_PROMPTPAY}</p>
+                    </div>
+                    """
+
                 st.markdown(f"""
-                <div style="background-color: white; color: black; padding: 25px; border-radius: 10px; font-family: 'Courier New', Courier, monospace; border: 1px solid #eee;">
+                <div style="background-color: white; color: black; padding: 25px; border-radius: 10px; font-family: 'Courier New', Courier, monospace; border: 1px solid #eee; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
                     <div style="text-align: center; margin-bottom: 15px;">
-                        <h2 style="margin: 0;">TAS POS</h2>
+                        <h2 style="margin: 0; color: #333;">TAS POS</h2>
                         <p style="font-size: 12px; color: #555;">ID: {r['id']}</p>
                     </div>
                     <div style="border-top: 2px dashed #000; padding: 10px 0;">
-                        {''.join([f'<div style="display: flex; justify-content: space-between; margin-bottom: 5px;"><span>{n} x{i["qty"]}</span><span>{i["price"]*i["qty"]:,}</span></div>' for n, i in r['items'].items()])}
+                        {''.join([f'<div style="display: flex; justify-content: space-between; margin-bottom: 5px;"><span>{n} x{i["qty"]}</span><span style="font-weight: bold;">{i["price"]*i["qty"]:,} ฿</span></div>' for n, i in r['items'].items()])}
                     </div>
                     <div style="border-top: 2px dashed #000; padding-top: 10px; display: flex; justify-content: space-between; font-size: 22px; font-weight: bold;">
                         <span>รวมทั้งสิ้น</span><span>{r['total']:,} ฿</span>
                     </div>
-                    <p style="font-size: 12px; margin-top: 10px;">วิธีชำระ: {r['method']}</p>
-                    <div style="text-align: center; margin-top: 20px;">
-                        {"<img src='https://promptpay.io/" + MY_PROMPTPAY + "/" + str(r['total']) + ".png' width='220' style='border: 1px solid #ddd;'/>" if r['method'] == "📱 PromptPay" else ""}
-                        <p style="font-size: 11px; margin-top: 8px; color: #888;">0945016189</p>
+                    <div style="margin-top: 10px; font-size: 14px; color: #333;">
+                        <b>ช่องทางชำระ:</b> {r['method']}
                     </div>
+                    {qr_section}
                 </div>
                 """, unsafe_allow_html=True)
                 
+                st.divider()
                 st.info("💡 เคล็ดลับ: กด Ctrl + P เพื่อบันทึกเป็น PDF")
                 if st.button("✅ เสร็จสิ้น / เริ่มการขายใหม่", use_container_width=True, type="primary"):
                     st.session_state.receipt = None
@@ -136,3 +146,4 @@ elif menu == "📦 สต็อก":
         st.dataframe(df_stock, use_container_width=True)
     else:
         st.error("ไม่สามารถดึงสต็อกได้")
+
