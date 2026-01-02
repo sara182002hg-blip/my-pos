@@ -2,11 +2,10 @@ import streamlit as st
 import pandas as pd
 import requests
 import time
-import plotly.express as px
 from io import StringIO
 from datetime import datetime, timedelta
 
-# --- 1. CONFIGURATION ---
+# --- 1. SETTINGS & LINKS ---
 URL_STOCK = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=228640428&single=true&output=csv"
 URL_SALES = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=952949333&single=true&output=csv"
 URL_PRODUCTS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=1258507712&single=true&output=csv"
@@ -14,175 +13,160 @@ URL_SUMMARY = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycbySel8Dxd6abzj7-JbYtaAgH3saKHBkeGsl47fpfUe293MmVwZM_Bx2K4CthYKUI4Ks/exec"
 PP_ID = "0945016189"
 
-st.set_page_config(page_title="TAS POS PREMIUM", layout="wide")
+st.set_page_config(page_title="TAS POS PREMIUM V20", layout="wide")
 
-# --- 2. PREMIUM DARK CSS ---
+# --- 2. PREMIUM BLACK CSS ---
 st.markdown("""
 <style>
-    /* Main Background */
     .stApp { background-color: #0E1117; color: #E0E0E0; }
-    
-    /* Product Cards */
-    .product-card {
-        background: #1C1F26;
-        padding: 15px;
-        border-radius: 15px;
-        border: 1px solid #30363D;
-        text-align: center;
-        transition: 0.3s;
-    }
-    .product-card:hover { border-color: #D4AF37; transform: translateY(-5px); }
-    .product-card img { width: 100%; height: 160px; object-fit: cover; border-radius: 10px; margin-bottom: 10px; }
-    
-    /* Sidebar */
     [data-testid="stSidebar"] { background-color: #161B22; border-right: 1px solid #30363D; }
-    
-    /* Buttons */
+    .product-card {
+        background: #1C2128; padding: 15px; border-radius: 12px;
+        border: 1px solid #30363D; text-align: center; margin-bottom: 10px;
+    }
+    .product-card img { width: 100%; height: 160px; object-fit: cover; border-radius: 8px; }
+    .price-tag { color: #D4AF37; font-size: 22px; font-weight: bold; margin: 10px 0; }
     .stButton>button {
-        background-color: #D4AF37; color: black; border-radius: 8px;
-        font-weight: bold; border: none; width: 100%; transition: 0.3s;
+        background-color: #D4AF37; color: #000; border-radius: 8px; font-weight: bold; border: none;
     }
-    .stButton>button:hover { background-color: #FAFAD2; color: black; box-shadow: 0 4px 15px rgba(212,175,55,0.4); }
-    
-    /* Metrics */
+    .stMetric { background-color: #1C2128 !important; border: 1px solid #30363D !important; border-radius: 12px !important; padding: 15px !important; }
     [data-testid="stMetricValue"] { color: #D4AF37 !important; }
-    div[data-testid="metric-container"] {
-        background-color: #1C1F26; padding: 20px; border-radius: 15px; border: 1px solid #30363D;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. CORE FUNCTIONS ---
-def fetch_data(url):
+# --- 3. POWERFUL DATA ENGINE ---
+def load_live_data(url):
     try:
         r = requests.get(f"{url}&ts={time.time()}", timeout=10)
         r.encoding = 'utf-8'
-        return pd.read_csv(StringIO(r.text)).dropna(how='all').reset_index(drop=True)
+        df = pd.read_csv(StringIO(r.text))
+        df.columns = df.columns.str.strip()
+        return df.dropna(how='all').reset_index(drop=True)
     except: return pd.DataFrame()
 
 if 'cart' not in st.session_state: st.session_state.cart = {}
-if 'order_finish' not in st.session_state: st.session_state.order_finish = None
+if 'checkout_done' not in st.session_state: st.session_state.checkout_done = None
 
 # --- 4. NAVIGATION ---
-with st.sidebar:
-    st.markdown("<h1 style='color:#D4AF37;'>TAS PREMIUM</h1>", unsafe_allow_html=True)
-    menu = st.radio("เมนูหลัก", ["🛒 ระบบขายสินค้า", "📊 วิเคราะห์ยอดขาย", "📦 จัดการสต็อก"], label_visibility="collapsed")
-    st.divider()
-    if st.button("🔄 ล้างข้อมูลแคช"):
-        st.cache_data.clear()
-        st.rerun()
+menu = st.sidebar.radio("📋 เมนูระบบ", ["🛒 ขายสินค้า", "📊 สรุปรายงานยอดขาย", "📦 คลังสต็อก"])
 
 # --- 5. PAGE: POS SYSTEM ---
-if menu == "🛒 ระบบขายสินค้า":
-    df_p = fetch_data(URL_PRODUCTS)
-    col_l, col_r = st.columns([2.2, 1.3])
+if menu == "🛒 ขายสินค้า":
+    df_p = load_live_data(URL_PRODUCTS)
+    col1, col2 = st.columns([2, 1.2])
 
-    with col_l:
-        st.markdown("<h2 style='color:#D4AF37;'>รายการสินค้า</h2>", unsafe_allow_html=True)
+    with col1:
+        st.markdown("<h2 style='color:#D4AF37;'>🛒 เลือกรายการสินค้า</h2>", unsafe_allow_html=True)
         if not df_p.empty:
             grid = st.columns(3)
             for i, row in df_p.iterrows():
-                p_name, p_price = str(row.iloc[0]), float(row.iloc[1])
+                p_name = str(row.iloc[0])
+                p_price = float(row.iloc[1])
                 p_img = str(row.iloc[2]) if len(row) > 2 else ""
+                
                 with grid[i % 3]:
                     st.markdown(f"""
                     <div class="product-card">
                         <img src="{p_img}">
-                        <div style="font-weight:bold; font-size:18px;">{p_name}</div>
-                        <div style="color:#D4AF37; font-size:22px; margin:5px 0;">{p_price:,.0f} ฿</div>
+                        <div style="font-weight:bold; margin-top:10px;">{p_name}</div>
+                        <div class="price-tag">{p_price:,.0f} ฿</div>
                     </div>
                     """, unsafe_allow_html=True)
-                    if st.button(f"เพิ่ม {p_name}", key=f"add_{i}"):
+                    if st.button(f"➕ เพิ่ม {p_name}", key=f"p_{i}", use_container_width=True):
                         st.session_state.cart[p_name] = st.session_state.cart.get(p_name, {'price': p_price, 'qty': 0})
                         st.session_state.cart[p_name]['qty'] += 1
                         st.rerun()
 
-    with col_r:
-        if st.session_state.order_finish:
-            res = st.session_state.order_finish
-            qr = f"https://promptpay.io/{PP_ID}/{res['total']}.png"
+    with col2:
+        if st.session_state.checkout_done:
+            res = st.session_state.checkout_done
+            qr_link = f"https://promptpay.io/{PP_ID}/{res['total']}.png"
             receipt_html = f"""
-            <div id="print_area" style="background:white; color:black; padding:25px; font-family:monospace; border-radius:10px; width:300px; margin:auto;">
-                <center><h2 style="margin:0;">TAS PREMIUM</h2><p>Receipt / ใบเสร็จ</p><hr style="border-top:1px dashed #000"></center>
+            <div style="background:white; color:black; padding:20px; font-family:monospace; border-radius:10px; width:280px; margin:auto; border:1px solid #000;">
+                <center><h3>TAS PREMIUM POS</h3><hr></center>
                 {''.join([f'<div style="display:flex;justify-content:space-between;"><span>{k} x{v["qty"]}</span><span>{v["price"]*v["qty"]:,.0f}</span></div>' for k,v in res['items'].items()])}
-                <hr style="border-top:1px dashed #000">
-                <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:bold;"><span>ยอดรวม</span><span>{res['total']:,.0f} ฿</span></div>
-                <center><p style="margin:10px 0;">ชำระโดย: {res['method']}</p></center>
-                {f'<div style="display:flex;justify-content:space-between;"><span>รับเงิน:</span><span>{res["cash"]:,.2f}</span></div><div style="display:flex;justify-content:space-between;font-weight:bold;"><span>เงินทอน:</span><span>{res["change"]:,.2f}</span></div>' if res['method'] == "เงินสด" else ""}
-                {f'<center><img src="{qr}" width="180"></center>' if res['method'] == "พร้อมเพย์" else ""}
-                <center style="font-size:10px;margin-top:15px;">{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}<br>ขอบคุณที่ใช้บริการ</center>
+                <hr><div style="display:flex;justify-content:space-between;font-weight:bold;font-size:18px;"><span>ยอดรวม</span><span>{res['total']:,.0f} ฿</span></div>
+                <center><p>ชำระโดย: {res['method']}</p></center>
+                {f'<div style="display:flex;justify-content:space-between;"><span>รับเงิน:</span><span>{res["cash"]:,.0f}</span></div><div style="display:flex;justify-content:space-between;font-weight:bold;"><span>เงินทอน:</span><span>{res["change"]:,.0f}</span></div>' if res['method'] == "เงินสด" else ""}
+                {f'<center><img src="{qr_link}" width="160"></center>' if res['method'] == "พร้อมเพย์" else ""}
+                <hr><center><small>{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}</small></center>
             </div>
             """
             st.markdown(receipt_html, unsafe_allow_html=True)
-            if st.button("🖨️ สั่งพิมพ์ใบเสร็จ"):
-                st.components.v1.html(f"<script>var w=window.open('','','width=400,height=600');w.document.write(`{receipt_html}`);w.document.close();setTimeout(function(){{w.print();w.close();}},500);</script>", height=0)
-            if st.button("🔄 ขายต่อ"):
-                st.session_state.order_finish = None; st.rerun()
+            if st.button("🖨️ พิมพ์ใบเสร็จ", use_container_width=True):
+                st.components.v1.html(f"<script>var w=window.open('','','width=400,height=600');w.document.write(`{receipt_html}`);w.document.close();w.print();w.close();</script>", height=0)
+            if st.button("🔄 เริ่มการขายใหม่", use_container_width=True):
+                st.session_state.checkout_done = None; st.rerun()
         else:
-            st.markdown("<h3 style='color:#D4AF37;'>ตะกร้าสินค้า</h3>", unsafe_allow_html=True)
-            if not st.session_state.cart: st.info("ยังไม่มีสินค้า")
+            st.markdown("<h3 style='color:#D4AF37;'>🛒 ตะกร้าสินค้า</h3>", unsafe_allow_html=True)
+            if not st.session_state.cart: st.info("ไม่มีสินค้าในตะกร้า")
             else:
                 total_all = 0
                 for k, v in list(st.session_state.cart.items()):
                     total_all += v['price'] * v['qty']
                     c1, c2, c3 = st.columns([2, 1, 1])
-                    c1.write(k)
-                    c2.write(f"x{v['qty']}")
+                    c1.write(k); c2.write(f"x{v['qty']}")
                     if c3.button("🗑️", key=f"del_{k}"): del st.session_state.cart[k]; st.rerun()
+                
                 st.divider()
                 st.markdown(f"## รวม: <span style='color:#D4AF37;'>{total_all:,.0f} ฿</span>", unsafe_allow_html=True)
-                m = st.selectbox("ช่องทางชำระเงิน", ["เงินสด", "พร้อมเพย์"])
-                cash_in = 0.0
-                if m == "เงินสด":
-                    cash_in = st.number_input("เงินที่รับมา", min_value=float(total_all))
+                pay_mode = st.radio("วิธีชำระเงิน", ["เงินสด", "พร้อมเพย์"], horizontal=True)
                 
-                if st.button("🚀 ยืนยันชำระเงิน"):
-                    requests.post(SCRIPT_URL, json={
-                        "action": "checkout", "bill_id": f"B{int(time.time())}",
-                        "summary": str(st.session_state.cart), "total": total_all, "method": m
-                    })
-                    st.session_state.order_finish = {"items": dict(st.session_state.cart), "total": total_all, "method": m, "cash": cash_in, "change": cash_in - total_all}
+                cash_received = 0
+                if pay_mode == "เงินสด":
+                    cash_received = st.number_input("เงินที่รับมา", min_value=float(total_all))
+                
+                if st.button("✅ ยืนยันชำระเงิน", use_container_width=True, type="primary"):
+                    try:
+                        requests.post(SCRIPT_URL, json={
+                            "action": "checkout", "total": total_all, "method": pay_mode,
+                            "summary": str(st.session_state.cart)
+                        }, timeout=5)
+                    except: pass # ป้องกัน UI ค้างถ้าเน็ตช้าแต่ข้อมูลส่งไปแล้ว
+                    st.session_state.checkout_done = {
+                        "items": dict(st.session_state.cart), "total": total_all,
+                        "method": pay_mode, "cash": cash_received, "change": cash_received - total_all
+                    }
                     st.session_state.cart = {}; st.rerun()
 
-# --- 6. PAGE: ANALYTICS ---
-elif menu == "📊 วิเคราะห์ยอดขาย":
-    st.markdown("<h2 style='color:#D4AF37;'>วิเคราะห์ยอดขาย Premium</h2>", unsafe_allow_html=True)
-    df_s = fetch_data(URL_SALES)
-    df_sum = fetch_data(URL_SUMMARY)
-    
-    if not df_s.empty:
-        # Data Cleaning
-        df_s.columns = df_s.columns.str.strip()
-        date_col = df_s.columns[0]
-        total_col = df_s.columns[2]
-        df_s[date_col] = pd.to_datetime(df_s[date_col], dayfirst=True, errors='coerce')
+# --- 6. PAGE: REPORTS (FIXED ALL) ---
+elif menu == "📊 สรุปรายงานยอดขาย":
+    st.markdown("<h2 style='color:#D4AF37;'>📊 วิเคราะห์ข้อมูลการขาย</h2>", unsafe_allow_html=True)
+    df_sales = load_live_data(URL_SALES)
+    df_sum = load_live_data(URL_SUMMARY)
+
+    if not df_sales.empty:
+        # ล้างข้อมูลวันที่ให้ชัวร์
+        df_sales.iloc[:, 0] = pd.to_datetime(df_sales.iloc[:, 0], dayfirst=True, errors='coerce')
+        val_col = df_sales.columns[2]
+        date_col = df_sales.columns[0]
         
-        # Logic ตัดยอด
+        today = datetime.now().date()
         today_str = datetime.now().strftime("%d/%m/%Y")
-        is_cut = not df_sum[df_sum.iloc[:,0].astype(str).str.contains(today_str)].empty if not df_sum.empty else False
         
-        # Metrics
-        today_val = df_s[df_s[date_col].dt.date == datetime.now().date()][total_col].sum()
-        week_val = df_s[df_s[date_col] >= (datetime.now() - timedelta(days=7))][total_col].sum()
-        month_val = df_s[df_s[date_col].dt.month == datetime.now().month][total_col].sum()
+        # ตรวจสอบการตัดยอด
+        is_closed = not df_sum[df_sum.iloc[:, 0].astype(str).str.contains(today_str)].empty if not df_sum.empty else False
         
+        # คำนวณรายได้
+        today_total = df_sales[df_sales[date_col].dt.date == today][val_col].sum()
+        week_total = df_sales[df_sales[date_col] >= (datetime.now() - timedelta(days=7))][val_col].sum()
+        month_total = df_sales[df_sales[date_col].dt.month == today.month][val_col].sum()
+
         m1, m2, m3 = st.columns(3)
-        m1.metric("ยอดขายวันนี้", f"{0 if is_cut else today_val:,.2f} ฿", delta="ตัดยอดแล้ว" if is_cut else "เปิดยอด")
-        m2.metric("ยอดรวม 7 วัน", f"{week_val:,.2f} ฿")
-        m3.metric("ยอดรวมเดือนนี้", f"{month_val:,.2f} ฿")
+        m1.metric("ยอดขายวันนี้", f"{0 if is_closed else today_total:,.0f} ฿", delta="ตัดยอดแล้ว" if is_closed else "ปกติ")
+        m2.metric("สรุป 7 วันล่าสุด", f"{week_total:,.0f} ฿")
+        m3.metric("สรุปเดือนนี้", f"{month_total:,.0f} ฿")
         
-        # Chart
-        st.markdown("### แนวโน้มยอดขายล่าสุด")
-        chart_data = df_s.groupby(df_s[date_col].dt.date)[total_col].sum().reset_index()
-        fig = px.bar(chart_data, x=date_col, y=total_col, color_discrete_sequence=['#D4AF37'])
-        fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
-        st.plotly_chart(fig, use_container_width=True)
-        
-        if st.button("📝 กดตัดยอดสรุปวัน (Reset)", disabled=is_cut):
-            requests.post(SCRIPT_URL, json={"action": "save_summary", "date": today_str, "total": float(today_val)})
-            st.success("บันทึกตัดยอดสำเร็จ!"); time.sleep(1); st.rerun()
+        st.divider()
+        if st.button("📝 กดปิดยอดรายวัน (Reset ยอดวันนี้)", type="primary", use_container_width=True, disabled=is_closed):
+            requests.post(SCRIPT_URL, json={"action": "save_summary", "date": today_str, "total": float(today_total)})
+            st.success("บันทึกสรุปยอดสำเร็จ!"); time.sleep(1); st.rerun()
+
+        st.subheader("📋 ประวัติบิลล่าสุด")
+        st.dataframe(df_sales.sort_values(by=date_col, ascending=False), use_container_width=True)
 
 # --- 7. PAGE: STOCK ---
-elif menu == "📦 จัดการสต็อก":
-    st.markdown("<h2 style='color:#D4AF37;'>สต็อกสินค้าคงเหลือ</h2>", unsafe_allow_html=True)
-    st.dataframe(fetch_data(URL_STOCK), use_container_width=True)
+elif menu == "📦 คลังสต็อก":
+    st.markdown("<h2 style='color:#D4AF37;'>📦 ตรวจสอบสต็อก</h2>", unsafe_allow_html=True)
+    if st.button("🔄 อัปเดตข้อมูลล่าสุด"): st.rerun()
+    st.dataframe(load_live_data(URL_STOCK), use_container_width=True)
