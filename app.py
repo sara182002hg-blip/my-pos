@@ -4,15 +4,17 @@ import requests
 import time
 from io import StringIO
 
-# --- 1. การตั้งค่าลิงก์ข้อมูล (CSV) ---
+# --- 1. ลิงก์ข้อมูล CSV (ตรวจสอบ GID ให้ตรงกับชีตของคุณ) ---
 URL_PRODUCTS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=1258507712&single=true&output=csv"
 URL_SALES = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=952949333&single=true&output=csv"
 URL_STOCK = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=228640428&single=true&output=csv"
+
+# ลิงก์ Apps Script ของคุณ
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz36dYw2mJI2Nr4aqCLswtd4v4wq3AhleY_tFWfBRRSw2YwlyAzla55gclUVlHR2ulB/exec"
+MY_PROMPTPAY = "0945016189" # เบอร์ของคุณ
 
-st.set_page_config(page_title="TAS POS - Pro", layout="wide")
+st.set_page_config(page_title="TAS POS Pro", layout="wide")
 
-# ฟังก์ชันโหลดข้อมูล (ป้องกันแถวว่างเพื่อเลี่ยง TypeError)
 def load_data(url):
     try:
         res = requests.get(f"{url}&t={int(time.time())}", timeout=10)
@@ -23,11 +25,10 @@ def load_data(url):
     except:
         return pd.DataFrame()
 
-# จัดการ State ของตะกร้าและใบเสร็จ
 if 'cart' not in st.session_state: st.session_state.cart = {}
 if 'receipt' not in st.session_state: st.session_state.receipt = None
 
-menu = st.sidebar.radio("ระบบจัดการ", ["🛒 ขายสินค้า", "📊 ยอดขาย", "📦 สต็อก"])
+menu = st.sidebar.radio("เมนูระบบ", ["🛒 ขายสินค้า", "📊 ยอดขาย", "📦 สต็อก"])
 
 if menu == "🛒 ขายสินค้า":
     df_p = load_data(URL_PRODUCTS)
@@ -41,18 +42,18 @@ if menu == "🛒 ขายสินค้า":
                 with grid[i % 3]:
                     with st.container(border=True):
                         st.markdown(f"### {row['Name']}")
-                        st.markdown(f"**฿{row['Price']:,}**")
+                        st.markdown(f"**ราคา: {row['Price']:,} ฿**")
                         if st.button(f"➕ เพิ่ม", key=f"add_{i}", use_container_width=True):
                             name = row['Name']
                             st.session_state.cart[name] = st.session_state.cart.get(name, {'price': row['Price'], 'qty': 0})
                             st.session_state.cart[name]['qty'] += 1
                             st.rerun()
         else:
-            st.warning("⚠️ ไม่พบข้อมูลสินค้า")
+            st.info("💡 กำลังดึงข้อมูลจาก Google Sheets...")
 
     with col_cart:
         st.subheader("🛒 ตะกร้าสินค้า")
-        if st.button("🗑️ เคลียร์ตะกร้าทั้งหมด", use_container_width=True):
+        if st.button("🗑️ เคลียร์ตะกร้า", use_container_width=True):
             st.session_state.cart = {}
             st.rerun()
             
@@ -73,51 +74,55 @@ if menu == "🛒 ขายสินค้า":
         if st.session_state.cart:
             st.divider()
             st.title(f"รวม: {total_sum:,} ฿")
-            
             pay_method = st.radio("วิธีชำระเงิน", ["💵 เงินสด", "📱 PromptPay"], horizontal=True)
             
             if st.button("✅ ยืนยันและออกใบเสร็จ", use_container_width=True, type="primary"):
                 bill_id = f"B{int(time.time())}"
                 summary = ", ".join([f"{k}({v['qty']})" for k,v in st.session_state.cart.items()])
                 
-                # ส่งข้อมูลไป Google Sheets
+                # ✅ ส่งข้อมูลแบบ JSON พร้อม Error Handling
                 payload = {"action": "checkout", "bill_id": bill_id, "summary": summary, "total": total_sum, "method": pay_method}
                 try:
-                    if requests.post(SCRIPT_URL, json=payload).status_code == 200:
+                    response = requests.post(SCRIPT_URL, json=payload, timeout=15)
+                    if response.status_code == 200:
                         st.session_state.receipt = {"id": bill_id, "items": dict(st.session_state.cart), "total": total_sum, "method": pay_method}
                         st.session_state.cart = {}
+                        st.success("บันทึกข้อมูลสำเร็จ!")
                         st.rerun()
-                except: st.error("บันทึกข้อมูลไม่สำเร็จ")
+                    else:
+                        st.error(f"บันทึกไม่สำเร็จ (Error {response.status_code})")
+                except:
+                    st.error("❌ การเชื่อมต่อล้มเหลว ตรวจสอบลิงก์ Apps Script")
 
-    # --- ส่วนแสดงใบเสร็จ ---
+    # --- แสดงใบเสร็จ ---
     if st.session_state.receipt:
-        with st.expander("📄 ใบเสร็จล่าสุด", expanded=True):
+        with st.expander("📄 ใบเสร็จรับเงิน", expanded=True):
             r = st.session_state.receipt
-            st.markdown(f"<div style='text-align: center;'><h3>ใบเสร็จรับเงิน #{r['id']}</h3></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align: center;'><h3>รายการสั่งซื้อ #{r['id']}</h3></div>", unsafe_allow_html=True)
             for n, i in r['items'].items():
-                st.write(f"{n} x{i['qty']} : {i['price']*i['qty']:,} ฿")
+                st.write(f"• {n} x{i['qty']} : {i['price']*i['qty']:,} ฿")
             st.divider()
-            st.subheader(f"ยอดรวมสุทธิ: {r['total']:,} ฿")
-            st.write(f"ช่องทาง: {r['method']}")
+            st.subheader(f"รวมทั้งสิ้น: {r['total']:,} ฿")
             
             if r['method'] == "📱 PromptPay":
-                # สร้าง QR PromptPay (ตัวอย่างลิงก์สร้าง QR)
-                st.image(f"https://promptpay.io/0812345678/{r['total']}.png", caption="สแกนเพื่อจ่ายเงิน", width=200)
+                st.image(f"https://promptpay.io/{MY_PROMPTPAY}/{r['total']}.png", width=250)
+                st.caption(f"ชื่อบัญชี: {MY_PROMPTPAY}")
             
-            if st.button("ปิดใบเสร็จ"): 
+            if st.button("❌ ปิดหน้าใบเสร็จ"): 
                 st.session_state.receipt = None
                 st.rerun()
 
 elif menu == "📊 ยอดขาย":
-    st.title("📊 รายงานยอดขาย")
+    st.title("📊 สรุปยอดขาย")
     df_sales = load_data(URL_SALES)
     if not df_sales.empty:
+        # แสดงรายการล่าสุดไว้บนสุด
         st.dataframe(df_sales.iloc[::-1], use_container_width=True)
     else:
-        st.info("ยังไม่มีข้อมูลยอดขาย")
+        st.warning("ยังไม่มีข้อมูลยอดขายในระบบ")
 
 elif menu == "📦 สต็อก":
-    st.title("📦 สต็อกสินค้าคงเหลือ")
+    st.title("📦 สต็อกสินค้า")
     df_stock = load_data(URL_STOCK)
     if not df_stock.empty:
         st.dataframe(df_stock, use_container_width=True)
