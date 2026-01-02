@@ -7,12 +7,11 @@ from io import StringIO
 # --- 1. ตั้งค่าลิงก์ข้อมูล ---
 URL_PRODUCTS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=1258507712&single=true&output=csv"
 URL_SALES = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=952949333&single=true&output=csv"
-URL_STOCK = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=228640428&single=true&output=csv"
 
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz36dYw2mJI2Nr4aqCLswtd4v4wq3AhleY_tFWfBRRSw2YwlyAzla55gclUVlHR2ulB/exec"
 MY_PROMPTPAY = "0945016189" 
 
-st.set_page_config(page_title="TAS POS Pro", layout="wide")
+st.set_page_config(page_title="TAS POS Receipt System", layout="wide")
 
 def load_data(url):
     try:
@@ -27,7 +26,7 @@ def load_data(url):
 if 'cart' not in st.session_state: st.session_state.cart = {}
 if 'receipt' not in st.session_state: st.session_state.receipt = None
 
-menu = st.sidebar.radio("เมนูระบบ", ["🛒 ขายสินค้า", "📊 ยอดขาย", "📦 สต็อก"])
+menu = st.sidebar.radio("เมนูระบบ", ["🛒 ขายสินค้า", "📊 ยอดขาย"])
 
 if menu == "🛒 ขายสินค้า":
     df_p = load_data(URL_PRODUCTS)
@@ -47,29 +46,15 @@ if menu == "🛒 ขายสินค้า":
                             st.session_state.cart[name] = st.session_state.cart.get(name, {'price': row['Price'], 'qty': 0})
                             st.session_state.cart[name]['qty'] += 1
                             st.rerun()
-        else:
-            st.info("กำลังโหลดข้อมูลสินค้า...")
 
     with col_cart:
         st.subheader("🛒 ตะกร้าสินค้า")
-        if st.button("🗑️ ล้างตะกร้า", use_container_width=True):
-            st.session_state.cart = {}
-            st.rerun()
-            
         total_sum = 0
         for name, item in list(st.session_state.cart.items()):
             subtotal = item['price'] * item['qty']
             total_sum += subtotal
-            c1, c2, c3 = st.columns([2, 1, 1])
-            c1.write(f"**{name}**\n{subtotal:,} ฿")
-            if c2.button("➖", key=f"min_{name}"):
-                st.session_state.cart[name]['qty'] -= 1
-                if st.session_state.cart[name]['qty'] <= 0: del st.session_state.cart[name]
-                st.rerun()
-            if c3.button("➕", key=f"plus_{name}"):
-                st.session_state.cart[name]['qty'] += 1
-                st.rerun()
-
+            st.write(f"**{name}** x{item['qty']} = {subtotal:,} ฿")
+        
         if st.session_state.cart:
             st.divider()
             st.title(f"รวม: {total_sum:,} ฿")
@@ -79,44 +64,48 @@ if menu == "🛒 ขายสินค้า":
                 bill_id = f"B{int(time.time())}"
                 summary = ", ".join([f"{k}({v['qty']})" for k,v in st.session_state.cart.items()])
                 
-                # 1. ตั้งค่าใบเสร็จในเครื่องก่อน (เพื่อให้ใบเสร็จขึ้นแน่นอน)
+                # เก็บข้อมูลลง Receipt State ทันทีเพื่อให้ QR ขึ้นแน่นอน
                 st.session_state.receipt = {
-                    "id": bill_id, 
-                    "items": dict(st.session_state.cart), 
-                    "total": total_sum, 
-                    "method": pay_method
+                    "id": bill_id, "items": dict(st.session_state.cart), 
+                    "total": total_sum, "method": pay_method, "time": time.ctime()
                 }
                 
-                # 2. พยายามส่งข้อมูลไป Google Sheets (ถ้าล้มเหลวใบเสร็จก็ยังต้องขึ้น)
-                payload = {"action": "checkout", "bill_id": bill_id, "summary": summary, "total": total_sum, "method": pay_method}
+                # พยายามส่งข้อมูลไป Sheets (เบื้องหลัง)
                 try:
-                    requests.post(SCRIPT_URL, json=payload, timeout=5)
-                except:
-                    pass # ปล่อยผ่านเพื่อให้ใบเสร็จแสดงต่อได้
+                    payload = {"action": "checkout", "bill_id": bill_id, "summary": summary, "total": total_sum, "method": pay_method}
+                    requests.post(SCRIPT_URL, json=payload, timeout=2)
+                except: pass 
                 
                 st.session_state.cart = {}
                 st.rerun()
 
-    # --- ส่วนแสดงใบเสร็จและ QR Code ---
+    # --- ส่วนใบเสร็จสำหรับสั่ง Print ---
     if st.session_state.receipt:
-        st.divider()
         r = st.session_state.receipt
-        with st.container(border=True):
-            st.markdown(f"<div style='text-align: center;'><h2>📄 ใบเสร็จรับเงิน #{r['id']}</h2></div>", unsafe_allow_html=True)
-            for n, i in r['items'].items():
-                st.write(f"• {n} x{i['qty']} = {i['price']*i['qty']:,} ฿")
-            st.markdown(f"### ยอดรวมทั้งสิ้น: {r['total']:,} ฿")
-            st.write(f"**ช่องทางชำระเงิน:** {r['method']}")
-            
-            if r['method'] == "📱 PromptPay":
-                st.write("---")
-                st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-                # เรียกใช้ API สร้าง QR Code
-                qr_url = f"https://promptpay.io/{MY_PROMPTPAY}/{r['total']}.png"
-                st.image(qr_url, caption=f"สแกนจ่ายเบอร์ {MY_PROMPTPAY}", width=300)
-                st.markdown("</div>", unsafe_allow_html=True)
-            
-            if st.button("✅ ปิดใบเสร็จและเริ่มการขายใหม่", use_container_width=True): 
+        st.divider()
+        # ใช้สไตล์ CSS เพื่อให้หน้าใบเสร็จดูเหมือนกระดาษ
+        st.markdown(f"""
+        <div style="background-color: white; color: black; padding: 30px; border: 1px solid #ddd; border-radius: 10px; font-family: 'Courier New', Courier, monospace; max-width: 500px; margin: auto;">
+            <h2 style="text-align: center;">ใบเสร็จรับเงิน</h2>
+            <p style="text-align: center;">ID: {r['id']}<br>วันที่: {r['time']}</p>
+            <hr>
+            {''.join([f'<p>{n} x{i["qty"]} <span style="float: right;">{i["price"]*i["qty"]:,} ฿</span></p>' for n, i in r['items'].items()])}
+            <hr>
+            <h3 style="text-align: right;">ยอดรวมสุทธิ: {r['total']:,} ฿</h3>
+            <p>ชำระด้วย: {r['method']}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # แสดง QR Code ทันทีถ้าเลือก PromptPay
+        if r['method'] == "📱 PromptPay":
+            qr_url = f"https://promptpay.io/{MY_PROMPTPAY}/{r['total']}.png"
+            st.image(qr_url, caption="สแกนเพื่อชำระเงิน (0945016189)", width=250)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.info("💡 เคล็ดลับ: กด Ctrl + P เพื่อบันทึกเป็น PDF หรือสั่งปริ้น")
+        with c2:
+            if st.button("❌ ปิดและเริ่มการขายใหม่", use_container_width=True):
                 st.session_state.receipt = None
                 st.rerun()
 
@@ -126,10 +115,4 @@ elif menu == "📊 ยอดขาย":
     if not df_sales.empty:
         st.dataframe(df_sales.iloc[::-1], use_container_width=True)
     else:
-        st.warning("ยังไม่มีข้อมูลยอดขาย")
-
-elif menu == "📦 สต็อก":
-    st.title("📦 สต็อกสินค้า")
-    df_stock = load_data(URL_STOCK)
-    if not df_stock.empty:
-        st.dataframe(df_stock, use_container_width=True)
+        st.info("ยังไม่มีข้อมูลยอดขาย")
