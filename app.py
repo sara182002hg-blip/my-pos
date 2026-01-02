@@ -14,19 +14,20 @@ CSV_STOCK = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0El
 
 st.set_page_config(page_title="TAS POS SYSTEM", layout="wide")
 
-# ✅ โหลดข้อมูลและลบแถวที่ไม่มีชื่อสินค้าออกทันทีเพื่อกัน TypeError
+# ✅ ฟังก์ชันโหลดข้อมูลและ "ลบแถวว่าง" ทันทีเพื่อกัน TypeError
 def load_data(url):
     try:
         res = requests.get(f"{url}&t={int(time.time())}", timeout=10)
         res.encoding = 'utf-8'
         df = pd.read_csv(StringIO(res.text))
         df.columns = df.columns.str.strip()
-        # กรองเฉพาะแถวที่มีชื่อสินค้าจริงๆ เท่านั้น
-        return df.dropna(subset=['Name']).reset_index(drop=True)
+        # ลบแถวที่ไม่มีชื่อสินค้าจริงๆ ออกไปเลย
+        df = df[df['Name'].notna() & (df['Name'] != "")]
+        return df.reset_index(drop=True)
     except:
         return pd.DataFrame()
 
-# ✅ ใบเสร็จ PDF (ล็อคภาษาอังกฤษเพื่อป้องกัน PDF Crash)
+# ✅ ฟังก์ชันใบเสร็จ PDF ล็อคภาษาอังกฤษเพื่อความเสถียร
 def generate_pdf(cart, total, method, bill_id):
     try:
         pdf = FPDF(format=(80, 150))
@@ -65,12 +66,12 @@ if menu == "🛒 หน้าขายสินค้า":
             for i, row in df_p.iterrows():
                 with grid[i % 3]:
                     with st.container(border=True):
-                        # ✅ ปรับรูปสูง 200px และเช็คความปลอดภัย
+                        # ✅ แก้ TypeError: ปรับรูปสูง 200px และเช็คความถูกต้องข้อมูล
                         img = row.get('Image_URL', "")
                         if pd.notnull(img) and isinstance(img, str) and img.startswith('http'):
                             st.image(img, height=200, use_container_width=True)
                         else:
-                            st.info("ไม่มีรูปภาพ")
+                            st.info("🖼️ ไม่มีรูปภาพ")
                         
                         p_name = row.get('Name', 'Item')
                         p_price = row.get('Price', 0)
@@ -115,12 +116,12 @@ if menu == "🛒 หน้าขายสินค้า":
                 if requests.post(SCRIPT_URL, json=payload, timeout=10).status_code == 200:
                     st.session_state.receipt_pdf = generate_pdf(st.session_state.cart, total_sum, method, bill_id)
                     st.session_state.cart = {}
-                    st.success("บันทึกแล้ว!")
+                    st.success("บันทึกข้อมูลเรียบร้อย!")
                     st.rerun()
 
         if st.session_state.receipt_pdf:
             st.download_button("🖨️ ดาวน์โหลดใบเสร็จ", data=st.session_state.receipt_pdf, file_name="bill.pdf", use_container_width=True)
-            if st.button("เริ่มขายใหม่"):
+            if st.button("เริ่มการขายใหม่"):
                 st.session_state.receipt_pdf = None
                 st.rerun()
 
@@ -128,9 +129,9 @@ elif menu == "📊 ยอดขาย":
     st.title("📊 สรุปยอดขาย")
     df = load_data(CSV_SALES)
     if not df.empty:
-        # ✅ ค้นหาคอลัมน์ยอดรวมอัตโนมัติ
+        # ✅ ค้นหาคอลัมน์ยอดรวมป้องกัน Error
         col = next((c for c in df.columns if 'ยอดรวม' in c or 'Total' in c), df.columns[-1])
-        st.metric("ยอดขายสะสม", f"{pd.to_numeric(df[col], errors='coerce').sum():,.2f} ฿")
+        st.metric("ยอดรวมสะสม", f"{pd.to_numeric(df[col], errors='coerce').sum():,.2f} ฿")
         st.dataframe(df.iloc[::-1], use_container_width=True)
 
 elif menu == "📦 สต็อก":
