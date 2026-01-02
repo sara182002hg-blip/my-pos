@@ -4,13 +4,13 @@ import requests
 import json
 import time
 from datetime import datetime
-from io import StringIO
+from io import StringIO, BytesIO
 from fpdf import FPDF
 
-# --- 1. ตั้งค่าการเชื่อมต่อ (ตรวจสอบความถูกต้องของ GID) ---
+# --- 1. ตั้งค่าการเชื่อมต่อ ---
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycby8f3q4R9it3uGxTpcMlXR_nfsV1c9bJPXy3hJahIVZyAul1IHpY6JpsY5iGrg3_Czp/exec"
 STOCK_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=228640428&single=true&output=csv"
-# ✅ แก้ไข SALES_URL ให้ดึงข้อมูลจากหน้า Sales (gid=0)
+# ✅ แก้ไขให้ดึงจากหน้า Sales (gid=0) เพื่อแก้ปัญหาไม่พบ Total_Amount
 SALES_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=0&single=true&output=csv"
 
 st.set_page_config(page_title="TAS POS Ultimate", layout="wide")
@@ -25,9 +25,10 @@ def load_data(url):
         return df
     except: return pd.DataFrame()
 
+# ✅ ฟังก์ชันสร้าง PDF พร้อม QR Code
 def generate_receipt_pdf(cart, total, method, bill_id):
     try:
-        pdf = FPDF(format=(80, 150))
+        pdf = FPDF(format=(80, 200)) # เพิ่มความยาวกระดาษรองรับ QR
         pdf.add_page()
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(60, 10, txt="TAS POS SYSTEM", ln=True, align='C')
@@ -35,14 +36,27 @@ def generate_receipt_pdf(cart, total, method, bill_id):
         pdf.cell(60, 5, txt=f"Bill ID: {bill_id}", ln=True)
         pdf.cell(60, 5, txt=f"Date: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=True)
         pdf.cell(60, 5, txt="-" * 35, ln=True)
+        
         for i, (name, item) in enumerate(cart.items()):
             pdf.cell(40, 7, txt=f"Item {i+1} x{item['qty']}")
             pdf.cell(20, 7, txt=f"{item['price']*item['qty']:,}", ln=True, align='R')
+        
         pdf.cell(60, 5, txt="-" * 35, ln=True)
+        pdf.set_font("Arial", 'B', 10)
         pdf.cell(30, 10, txt="TOTAL:")
         pdf.cell(30, 10, txt=f"{total:,} THB", ln=True, align='R')
-        return pdf.output()
-    except: return None
+        
+        # ✅ เพิ่ม QR Code ลงในสลิป (ถ้าจ่ายด้วย QR Code)
+        if method == "QR Code":
+            qr_url = f"https://promptpay.io/0945016189/{total}.png"
+            pdf.ln(5)
+            pdf.cell(60, 5, txt="Scan to Pay (PromptPay)", ln=True, align='C')
+            pdf.image(qr_url, x=15, w=50) # วางรูป QR
+            
+        return pdf.output(dest='S').encode('latin-1')
+    except Exception as e: 
+        st.error(f"PDF Error: {e}")
+        return None
 
 if 'cart' not in st.session_state: st.session_state.cart = {}
 if 'pdf_receipt' not in st.session_state: st.session_state.pdf_receipt = None
@@ -93,13 +107,15 @@ if menu == "🛒 ขายสินค้า (POS)":
                 summary = ", ".join([f"{n}({i['qty']})" for n, i in st.session_state.cart.items()])
                 payload = {"action": "checkout", "bill_id": bill_id, "summary": summary, "total": total_sum, "method": method}
                 try:
-                    st.session_state.pdf_receipt = generate_receipt_pdf(st.session_state.cart, total_sum, method, bill_id)
+                    # บันทึกข้อมูลลง Sheets
                     res = requests.post(SCRIPT_URL, json=payload, timeout=15)
-                    if res.status_code == 200: st.success(f"บันทึกสำเร็จ!")
+                    if res.status_code == 200: 
+                        st.success(f"บันทึกสำเร็จ!")
+                        st.session_state.pdf_receipt = generate_receipt_pdf(st.session_state.cart, total_sum, method, bill_id)
                     else: st.error("บันทึกไม่สำเร็จ")
                 except: st.error("ระบบขัดข้อง")
             if st.session_state.pdf_receipt:
-                st.download_button("🖨️ ดาวน์โหลดใบเสร็จ", data=bytes(st.session_state.pdf_receipt), file_name=f"Bill_{bill_id}.pdf", use_container_width=True)
+                st.download_button("🖨️ ดาวน์โหลดใบเสร็จ", data=st.session_state.pdf_receipt, file_name=f"Bill_{bill_id}.pdf", use_container_width=True)
         else: st.info("ตะกร้าว่าง")
 
 elif menu == "📊 สรุปยอด & กำไร":
@@ -107,20 +123,19 @@ elif menu == "📊 สรุปยอด & กำไร":
     df_sales = load_data(SALES_URL)
     if not df_sales.empty:
         try:
-            # ✅ ค้นหาคอลัมน์ที่มีคำว่า 'Total' หรือ 'ยอดรวม'
-            total_cols = [c for c in df_sales.columns if 'Total' in c or 'ยอดรวม' in c]
-            if total_cols:
-                col_name = total_cols[0]
+            # ✅ ค้นหาคอลัมน์ยอดรวมให้กว้างขึ้น เพื่อป้องกัน IndexError
+            target_cols = [c for c in df_sales.columns if any(kw in c for kw in ['Total', 'ยอดรวม', 'Amount'])]
+            if target_cols:
+                col_name = target_cols[0]
                 total_val = pd.to_numeric(df_sales[col_name], errors='coerce').fillna(0).sum()
                 st.metric("ยอดขายรวมทั้งหมด", f"{total_val:,.2f} ฿")
-                st.subheader("📋 รายการล่าสุด (20 รายการ)")
-                st.dataframe(df_sales.iloc[::-1].head(20), use_container_width=True)
+                st.subheader("📋 รายการล่าสุด")
+                st.dataframe(df_sales.iloc[::-1], use_container_width=True)
             else:
-                st.error("ระบบหาคอลัมน์ ยอดรวม ไม่เจอ กรุณาตรวจสอบว่าเลือกแผ่นชีต Sales ถูกต้อง")
-                st.dataframe(df_sales.head()) # แสดงตัวอย่างข้อมูลให้ดูว่าดึงแผ่นไหนมา
-        except Exception as e:
-            st.error(f"การแสดงผลสรุปยอดขัดข้อง: {e}")
-    else: st.info("ยังไม่มีข้อมูลการขายในแผ่น Sales")
+                st.warning("ไม่พบคอลัมน์ยอดเงินในแผ่นชีต Sales")
+                st.dataframe(df_sales)
+        except Exception as e: st.error(f"Error: {e}")
+    else: st.info("ยังไม่มีข้อมูลในแผ่น Sales")
 
 elif menu == "📦 สต็อกสินค้า":
     st.title("📦 หลังบ้าน (สต็อก)")
