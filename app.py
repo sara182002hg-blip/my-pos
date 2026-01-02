@@ -3,13 +3,11 @@ import pandas as pd
 import requests
 import time
 from datetime import datetime
-from io import StringIO, BytesIO
+from io import StringIO
 from fpdf import FPDF
 
-# --- 1. ตั้งค่าการเชื่อมต่อ (อัปเดตตามลิงก์ใหม่ของคุณ) ---
+# --- 1. การเชื่อมต่อข้อมูล ---
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycby8f3q4R9it3uGxTpcMlXR_nfsV1c9bJPXy3hJahIVZyAul1IHpY6JpsY5iGrg3_Czp/exec"
-
-# แยกลิงก์ตาม GID ที่คุณระบุมา
 PRODUCT_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=0&single=true&output=csv"
 STOCK_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=228640428&single=true&output=csv"
 SALES_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=952949333&single=true&output=csv"
@@ -26,7 +24,7 @@ def load_data(url):
         return df
     except: return pd.DataFrame()
 
-# ✅ แก้ไขฟังก์ชันใบเสร็จ: รองรับทั้งเงินสดและ QR และแก้ Error 'bytearray'
+# ✅ ฟังก์ชัน PDF: แก้ไข Error ภาษาไทยและ Bytearray
 def generate_receipt_pdf(cart, total, method, bill_id):
     try:
         pdf = FPDF(format=(80, 150))
@@ -38,29 +36,27 @@ def generate_receipt_pdf(cart, total, method, bill_id):
         pdf.cell(60, 5, txt=f"Date: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=True)
         pdf.cell(60, 5, txt="-" * 35, ln=True)
         
+        # ใช้ชื่อภาษาอังกฤษชั่วคราวเพื่อเลี่ยง Error ฟอนต์ภาษาไทย
+        i = 1
         for name, item in cart.items():
-            pdf.cell(40, 7, txt=f"{name[:15]} x{item['qty']}")
+            pdf.cell(40, 7, txt=f"Item {i} x{item['qty']}")
             pdf.cell(20, 7, txt=f"{item['price']*item['qty']:,}", ln=True, align='R')
-        
+            i += 1
+            
         pdf.cell(60, 5, txt="-" * 35, ln=True)
         pdf.set_font("Arial", 'B', 10)
         pdf.cell(30, 10, txt="TOTAL:")
         pdf.cell(30, 10, txt=f"{total:,} THB", ln=True, align='R')
-        pdf.cell(30, 5, txt=f"Method: {method}", ln=True)
+        pdf.set_font("Arial", size=8)
+        pdf.cell(60, 5, txt=f"Payment: {method}", ln=True)
 
-        if method == "QR Code":
-            qr_url = f"https://promptpay.io/0945016189/{total}.png"
-            pdf.ln(5)
-            pdf.image(qr_url, x=15, w=50)
-            
-        # ส่งค่ากลับเป็น bytes โดยตรง (แก้ปัญหา encode error)
-        return pdf.output(dest='S').encode('latin-1')
+        # ✅ ส่งออกเป็น Bytes โดยตรงเพื่อแก้ปัญหา 'bytearray' error
+        return pdf.output(dest='S')
     except Exception as e:
-        st.error(f"PDF Error: {e}")
         return None
 
 if 'cart' not in st.session_state: st.session_state.cart = {}
-if 'pdf_data' not in st.session_state: st.session_state.pdf_data = None
+if 'last_receipt' not in st.session_state: st.session_state.last_receipt = None
 
 menu = st.sidebar.radio("เมนูระบบ", ["🛒 ขายสินค้า (POS)", "📊 สรุปยอด & กำไร", "📦 สต็อกสินค้า"])
 
@@ -83,6 +79,7 @@ if menu == "🛒 ขายสินค้า (POS)":
                         n = str(row['Name']).strip()
                         st.session_state.cart[n] = st.session_state.cart.get(n, {'price': row['Price'], 'qty': 0})
                         st.session_state.cart[n]['qty'] += 1; st.rerun()
+
     with col2:
         st.subheader("🛒 ตะกร้าสินค้า")
         if st.session_state.cart:
@@ -102,6 +99,10 @@ if menu == "🛒 ขายสินค้า (POS)":
             st.header(f"ยอดรวม: {total_sum:,} ฿")
             method = st.radio("วิธีชำระเงิน", ["เงินสด", "QR Code"], horizontal=True)
             
+            # ✅ แสดง QR PromptPay ทันทีเพื่อให้สแกนง่าย
+            if method == "QR Code":
+                st.image(f"https://promptpay.io/0945016189/{total_sum}.png", width=250, caption="สแกนเพื่อชำระเงิน")
+            
             if st.button("✅ ยืนยันการขาย", use_container_width=True, type="primary"):
                 bill_id = f"B{int(time.time())}"
                 summary = ", ".join([f"{n}({item['qty']})" for n, item in st.session_state.cart.items()])
@@ -109,34 +110,32 @@ if menu == "🛒 ขายสินค้า (POS)":
                 try:
                     res = requests.post(SCRIPT_URL, json=payload, timeout=15)
                     if res.status_code == 200:
-                        # สร้างใบเสร็จเก็บไว้ใน session
-                        st.session_state.pdf_data = generate_receipt_pdf(st.session_state.cart, total_sum, method, bill_id)
+                        st.session_state.last_receipt = generate_receipt_pdf(st.session_state.cart, total_sum, method, bill_id)
                         st.success("บันทึกข้อมูลเรียบร้อย!")
                         st.session_state.cart = {}
                         st.rerun()
                 except: st.error("บันทึกไม่สำเร็จ")
         
-        # ✅ แสดงปุ่มดาวน์โหลดใบเสร็จ (ปรากฏทั้งเงินสดและ QR)
-        if st.session_state.pdf_data:
-            st.download_button("🖨️ ดาวน์โหลดใบเสร็จล่าสุด", data=st.session_state.pdf_data, 
+        # ✅ ปุ่มดาวน์โหลดใบเสร็จ (แสดงเมื่อขายสำเร็จ)
+        if st.session_state.last_receipt:
+            st.download_button("🖨️ ดาวน์โหลดใบเสร็จล่าสุด", data=st.session_state.last_receipt, 
                              file_name=f"Receipt_{int(time.time())}.pdf", mime="application/pdf", use_container_width=True)
+        else:
+            st.info("ยังไม่มีรายการขายล่าสุด")
 
 elif menu == "📊 สรุปยอด & กำไร":
     st.title("📊 สรุปผลการขาย")
     df_sales = load_data(SALES_URL)
     if not df_sales.empty:
-        # ✅ แก้ไขการหาคอลัมน์ ยอดรวม/Total_Amount ให้ยืดหยุ่นขึ้น
-        col_options = ['ยอดรวม', 'Total_Amount', 'ยอดรวมรวม', 'Total']
-        col_name = next((c for c in col_options if c in df_sales.columns), None)
-        
+        # ตรวจสอบคอลัมน์จาก Google Sheets จริง
+        col_name = 'ยอดรวม' if 'ยอดรวม' in df_sales.columns else df_sales.columns[3] if len(df_sales.columns) > 3 else None
         if col_name:
             total_val = pd.to_numeric(df_sales[col_name], errors='coerce').fillna(0).sum()
             st.metric("ยอดขายรวมทั้งหมด", f"{total_val:,.2f} ฿")
             st.dataframe(df_sales.iloc[::-1], use_container_width=True)
         else:
-            st.error("ไม่พบคอลัมน์สรุปยอดในหน้า Sales")
-            st.write("คอลัมน์ที่ตรวจพบ:", list(df_sales.columns))
-    else: st.info("ยังไม่มีข้อมูลในหน้า Sales")
+            st.warning("ไม่พบคอลัมน์คำนวณยอด")
+    else: st.info("ยังไม่มีข้อมูลการขาย")
 
 elif menu == "📦 สต็อกสินค้า":
     st.title("📦 สต็อกสินค้า")
