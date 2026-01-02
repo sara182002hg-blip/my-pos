@@ -4,12 +4,11 @@ import requests
 import time
 from io import StringIO
 
-# --- 1. ตั้งค่าลิงก์ข้อมูล (ดึงจาก Google Sheets ของคุณ) ---
+# --- 1. ตั้งค่าลิงก์ข้อมูล ---
 URL_PRODUCTS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=1258507712&single=true&output=csv"
 URL_SALES = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=952949333&single=true&output=csv"
 URL_STOCK = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=228640428&single=true&output=csv"
 
-# ✅ ลิงก์ Apps Script ล่าสุดที่คุณส่งมา
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzFd4Q3VTiqyhFhiI0Atu6Hu-ZZQ_0tP3PgE6jej9Q3igT2LtBV4g9te0Fw-hV0F9M/exec"
 MY_PROMPTPAY = "0945016189" 
 
@@ -31,69 +30,85 @@ if 'receipt' not in st.session_state: st.session_state.receipt = None
 menu = st.sidebar.radio("เมนูระบบ", ["🛒 ขายสินค้า", "📊 ยอดขาย", "📦 สต็อก"])
 
 if menu == "🛒 ขายสินค้า":
+    # โหลดทั้งข้อมูลสินค้าและสต็อกเพื่อเช็คจำนวนคงเหลือ
     df_p = load_data(URL_PRODUCTS)
+    df_s = load_data(URL_STOCK)
+    
     col_main, col_right = st.columns([2.2, 1.8])
     
     with col_main:
-        st.subheader("📦 เลือกรายการสินค้า")
+        st.subheader("📦 รายการสินค้า")
         if not df_p.empty:
             grid = st.columns(2) 
             for i, row in df_p.iterrows():
+                # ดึงจำนวนสต็อกล่าสุดของสินค้านั้นๆ
+                stock_qty = 0
+                if not df_s.empty:
+                    match = df_s[df_s['Name'] == row['Name']]
+                    if not match.empty:
+                        stock_qty = match.iloc[0]['Stock']
+
                 with grid[i % 2]:
                     with st.container(border=True):
                         st.markdown(f"### {row['Name']}")
                         st.markdown(f"**ราคา {row['Price']:,} ฿**")
-                        if st.button(f"➕ เพิ่มลงตะกร้า", key=f"add_{i}", use_container_width=True):
-                            name = row['Name']
-                            st.session_state.cart[name] = st.session_state.cart.get(name, {'price': row['Price'], 'qty': 0})
-                            st.session_state.cart[name]['qty'] += 1
-                            st.session_state.receipt = None 
-                            st.rerun()
+                        st.caption(f"คงเหลือในสต็อก: {stock_qty} ชิ้น")
+                        
+                        # เงื่อนไขเช็คสต็อกก่อนกด (ป้องกันติดลบ)
+                        cart_qty = st.session_state.cart.get(row['Name'], {}).get('qty', 0)
+                        can_add = stock_qty > cart_qty
+                        
+                        if can_add:
+                            if st.button(f"➕ เพิ่มสินค้า", key=f"add_{i}", use_container_width=True):
+                                name = row['Name']
+                                st.session_state.cart[name] = st.session_state.cart.get(name, {'price': row['Price'], 'qty': 0})
+                                st.session_state.cart[name]['qty'] += 1
+                                st.session_state.receipt = None 
+                                st.rerun()
+                        else:
+                            st.button("❌ สินค้าหมด / ไม่พอ", key=f"out_{i}", use_container_width=True, disabled=True)
 
     with col_right:
-# --- ส่วนแสดงใบเสร็จดีไซน์ใหม่ (แก้ไขส่วน QR Code ไม่ขึ้น) ---
         if st.session_state.receipt:
             r = st.session_state.receipt
             st.subheader("📄 ใบเสร็จรับเงิน")
             with st.container(border=True):
-                # ส่วนบนของใบเสร็จ (ข้อมูลสินค้าและยอดรวม)
-                st.markdown(f"""
-                <div style="background-color: white; color: black; padding: 25px; border-radius: 10px; font-family: 'Courier New', Courier, monospace; border: 1px solid #eee;">
-                    <div style="text-align: center; margin-bottom: 15px;">
-                        <h2 style="margin: 0; color: #333;">TAS POS</h2>
-                        <p style="font-size: 12px; color: #555;">ID: {r['id']}</p>
+                # ดีไซน์ใบเสร็จพร้อม QR Code ในตัว
+                qr_html = ""
+                if r['method'] == "📱 PromptPay":
+                    qr_html = f"""
+                    <div style="text-align: center; margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
+                        <img src="https://promptpay.io/{MY_PROMPTPAY}/{r['total']}.png" width="250" style="border: 1px solid #ddd;"/>
+                        <p style="font-size: 12px; color: #666; margin-top: 5px;">สแกนจ่ายเบอร์ {MY_PROMPTPAY}</p>
                     </div>
-                    <div style="border-top: 2px dashed #000; padding: 10px 0;">
+                    """
+                
+                st.markdown(f"""
+                <div style="background-color: white; color: black; padding: 30px; border-radius: 10px; font-family: 'Courier New', Courier, monospace; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <h2 style="margin: 0;">TAS POS</h2>
+                        <p style="font-size: 12px; color: #666;">ID: {r['id']}</p>
+                    </div>
+                    <div style="border-top: 2px dashed #000; border-bottom: 2px dashed #000; padding: 15px 0; margin-bottom: 15px;">
                         {''.join([f'<div style="display: flex; justify-content: space-between; margin-bottom: 5px;"><span>{n} x{i["qty"]}</span><span style="font-weight: bold;">{i["price"]*i["qty"]:,} ฿</span></div>' for n, i in r['items'].items()])}
                     </div>
-                    <div style="border-top: 2px dashed #000; padding-top: 10px; display: flex; justify-content: space-between; font-size: 22px; font-weight: bold;">
+                    <div style="display: flex; justify-content: space-between; font-size: 24px; font-weight: bold;">
                         <span>รวมทั้งสิ้น</span><span>{r['total']:,} ฿</span>
                     </div>
-                    <div style="margin-top: 10px; font-size: 14px; color: #333;">
-                        <b>ช่องทางชำระ:</b> {r['method']}
-                    </div>
+                    <p style="font-size: 14px; margin-top: 10px;">วิธีชำระ: {r['method']}</p>
+                    {qr_html}
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # ส่วนแสดง QR Code (แยกออกมาใช้ st.image เพื่อให้แสดงผลแน่นอน)
-                if r['method'] == "📱 PromptPay":
-                    st.write("") # เว้นวรรคเล็กน้อย
-                    qr_url = f"https://promptpay.io/{MY_PROMPTPAY}/{r['total']}.png"
-                    col_q1, col_q2, col_q3 = st.columns([1, 2, 1])
-                    with col_q2:
-                        st.image(qr_url, caption=f"สแกนจ่ายเบอร์ {MY_PROMPTPAY}", use_container_width=True)
-                
                 st.divider()
-                st.info("💡 เคล็ดลับ: กด Ctrl + P เพื่อบันทึกเป็น PDF")
-                if st.button("✅ เสร็จสิ้น / เริ่มการขายใหม่", use_container_width=True, type="primary"):
+                if st.button("✅ เริ่มการขายใหม่", use_container_width=True, type="primary"):
                     st.session_state.receipt = None
                     st.rerun()
-                    
-        # --- ส่วนแสดงตะกร้าสินค้า ---
+        
         else:
-            st.subheader("🛒 รายการในตะกร้า")
+            st.subheader("🛒 ตะกร้าสินค้า")
             if not st.session_state.cart:
-                st.write("ยังไม่มีสินค้า...")
+                st.info("ยังไม่มีสินค้าในตะกร้า")
             else:
                 total_sum = 0
                 for name, item in list(st.session_state.cart.items()):
@@ -106,43 +121,43 @@ if menu == "🛒 ขายสินค้า":
                         if st.session_state.cart[name]['qty'] <= 0: del st.session_state.cart[name]
                         st.rerun()
                     if c3.button("➕", key=f"plus_{name}"):
-                        st.session_state.cart[name]['qty'] += 1
+                        # เช็คสต็อกอีกรอบก่อนเพิ่มจำนวนในตะกร้า
+                        current_stock = df_s[df_s['Name'] == name].iloc[0]['Stock'] if not df_s.empty else 0
+                        if item['qty'] < current_stock:
+                            st.session_state.cart[name]['qty'] += 1
+                        else:
+                            st.toast(f"ขออภัย {name} ในสต็อกไม่พอแล้ว", icon="⚠️")
                         st.rerun()
 
                 st.divider()
-                st.title(f"ยอดรวม: {total_sum:,} ฿")
-                pay_method = st.radio("ช่องทางการชำระเงิน", ["💵 เงินสด", "📱 PromptPay"], horizontal=True)
+                st.title(f"รวม: {total_sum:,} ฿")
+                pay_method = st.radio("วิธีชำระเงิน", ["💵 เงินสด", "📱 PromptPay"], horizontal=True)
                 
-                if st.button("🚀 ยืนยันชำระเงินและออกใบเสร็จ", use_container_width=True, type="primary"):
+                if st.button("✅ ยืนยันชำระเงิน", use_container_width=True, type="primary"):
                     bill_id = f"B{int(time.time())}"
                     summary = ", ".join([f"{k}({v['qty']})" for k,v in st.session_state.cart.items()])
-                    
-                    # บันทึกสถานะใบเสร็จ
                     st.session_state.receipt = {"id": bill_id, "items": dict(st.session_state.cart), "total": total_sum, "method": pay_method}
                     
-                    # ส่งข้อมูลไปบันทึกยอดและตัดสต็อก
                     try:
                         payload = {"action": "checkout", "bill_id": bill_id, "summary": summary, "total": total_sum, "method": pay_method}
-                        requests.post(SCRIPT_URL, json=payload, timeout=5)
+                        requests.post(SCRIPT_URL, json=payload, timeout=2)
                     except: pass
                     
                     st.session_state.cart = {}
                     st.rerun()
 
 elif menu == "📊 ยอดขาย":
-    st.title("📊 สรุปยอดขายประจำวัน")
+    st.title("📊 รายงานยอดขาย")
     df_sales = load_data(URL_SALES)
     if not df_sales.empty:
         st.dataframe(df_sales.iloc[::-1], use_container_width=True)
     else:
-        st.info("รอข้อมูลยอดขายใหม่...")
+        st.warning("ยังไม่มีข้อมูลยอดขาย")
 
 elif menu == "📦 สต็อก":
-    st.title("📦 เช็คสต็อกสินค้าคงเหลือ")
+    st.title("📦 สต็อกสินค้าคงเหลือ")
     df_stock = load_data(URL_STOCK)
     if not df_stock.empty:
         st.dataframe(df_stock, use_container_width=True)
     else:
-        st.error("ไม่สามารถดึงสต็อกได้")
-
-
+        st.error("ไม่สามารถโหลดข้อมูลสต็อกได้")
