@@ -6,7 +6,7 @@ from datetime import datetime
 from io import StringIO
 from fpdf import FPDF
 
-# --- การตั้งค่า (ตรวจสอบ GID และ URL ให้ถูกต้อง) ---
+# --- การตั้งค่าการเชื่อมต่อ ---
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycby8f3q4R9it3uGxTpcMlXR_nfsV1c9bJPXy3hJahIVZyAul1IHpY6JpsY5iGrg3_Czp/exec"
 CSV_PRODUCTS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=0&single=true&output=csv"
 CSV_SALES = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=952949333&single=true&output=csv"
@@ -14,18 +14,19 @@ CSV_STOCK = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0El
 
 st.set_page_config(page_title="TAS POS SYSTEM", layout="wide")
 
-# ✅ ฟังก์ชันโหลดข้อมูลพร้อมล้างค่าว่างป้องกัน Error
+# ✅ โหลดข้อมูลและลบแถวที่ไม่มีชื่อสินค้าออกทันทีเพื่อกัน TypeError
 def load_data(url):
     try:
         res = requests.get(f"{url}&t={int(time.time())}", timeout=10)
         res.encoding = 'utf-8'
         df = pd.read_csv(StringIO(res.text))
         df.columns = df.columns.str.strip()
-        return df.fillna("") 
+        # กรองเฉพาะแถวที่มีชื่อสินค้าจริงๆ เท่านั้น
+        return df.dropna(subset=['Name']).reset_index(drop=True)
     except:
         return pd.DataFrame()
 
-# ✅ ฟังก์ชันสร้างใบเสร็จ PDF (รองรับเฉพาะภาษาอังกฤษเพื่อความเสถียร)
+# ✅ ใบเสร็จ PDF (ล็อคภาษาอังกฤษเพื่อป้องกัน PDF Crash)
 def generate_pdf(cart, total, method, bill_id):
     try:
         pdf = FPDF(format=(80, 150))
@@ -47,50 +48,50 @@ def generate_pdf(cart, total, method, bill_id):
     except:
         return None
 
-# --- เตรียมระบบตะกร้า ---
 if 'cart' not in st.session_state: st.session_state.cart = {}
-if 'receipt' not in st.session_state: st.session_state.receipt = None
+if 'receipt_pdf' not in st.session_state: st.session_state.receipt_pdf = None
 
 menu = st.sidebar.radio("เมนูระบบ", ["🛒 หน้าขายสินค้า", "📊 ยอดขาย", "📦 สต็อก"])
 
 if menu == "🛒 หน้าขายสินค้า":
     df_p = load_data(CSV_PRODUCTS)
-    col_l, col_r = st.columns([3, 1.8])
+    col_main, col_cart = st.columns([3, 1.8])
     
-    with col_l:
+    with col_main:
         st.subheader("📦 รายการสินค้า")
         if not df_p.empty:
-            # ✅ ปรับเป็น 3 คอลัมน์ตามคำขอ
+            # ✅ จัดเรียง 3 คอลัมน์ตามคำขอ
             grid = st.columns(3) 
             for i, row in df_p.iterrows():
                 with grid[i % 3]:
                     with st.container(border=True):
-                        # ✅ แก้ TypeError โดยตรวจสอบลิงก์รูปภาพ
+                        # ✅ ปรับรูปสูง 200px และเช็คความปลอดภัย
                         img = row.get('Image_URL', "")
-                        if isinstance(img, str) and img.startswith('http'):
-                            # ✅ ปรับความสูงเป็น 200px ตามคำขอ
+                        if pd.notnull(img) and isinstance(img, str) and img.startswith('http'):
                             st.image(img, height=200, use_container_width=True)
                         else:
                             st.info("ไม่มีรูปภาพ")
                         
-                        st.write(f"**{row.get('Name', 'N/A')}**")
-                        st.write(f"฿{row.get('Price', 0)}")
+                        p_name = row.get('Name', 'Item')
+                        p_price = row.get('Price', 0)
+                        st.write(f"**{p_name}**")
+                        st.write(f"฿{p_price}")
                         
-                        if st.button("➕ เพิ่ม", key=f"add_{i}", use_container_width=True):
-                            n = str(row.get('Name', 'Item')).strip()
-                            st.session_state.cart[n] = st.session_state.cart.get(n, {'price': row.get('Price', 0), 'qty': 0})
+                        if st.button("➕ เพิ่มสินค้า", key=f"add_{i}", use_container_width=True):
+                            n = str(p_name).strip()
+                            st.session_state.cart[n] = st.session_state.cart.get(n, {'price': p_price, 'qty': 0})
                             st.session_state.cart[n]['qty'] += 1
                             st.rerun()
 
-    with col_r:
-        st.subheader("🛒 ตะกร้าสินค้า")
+    with col_cart:
+        st.subheader("🛒 ตะกร้า")
         if st.session_state.cart:
             total_sum = 0
             for name, item in list(st.session_state.cart.items()):
                 total_sum += item['price'] * item['qty']
                 c1, c2 = st.columns([2, 1.5])
                 c1.write(f"{name}\n{item['price']}฿")
-                # ✅ ปุ่มบวกลบสินค้า
+                # ✅ ปุ่มบวกลบ
                 b1, b2 = c2.columns(2)
                 if b1.button("➖", key=f"m_{name}"):
                     if st.session_state.cart[name]['qty'] > 1: st.session_state.cart[name]['qty'] -= 1
@@ -101,8 +102,10 @@ if menu == "🛒 หน้าขายสินค้า":
                     st.rerun()
             
             st.divider()
-            st.title(f"{total_sum:,} ฿")
-            method = st.radio("ชำระเงิน", ["เงินสด", "QR Code"], horizontal=True)
+            st.header(f"{total_sum:,} ฿")
+            method = st.radio("ชำระ", ["เงินสด", "QR Code"], horizontal=True)
+            if method == "QR Code":
+                st.image(f"https://promptpay.io/0945016189/{total_sum}.png", width=150)
             
             if st.button("✅ ยืนยันชำระเงิน", use_container_width=True, type="primary"):
                 bill_id = f"B{int(time.time())}"
@@ -110,23 +113,26 @@ if menu == "🛒 หน้าขายสินค้า":
                 payload = {"action": "checkout", "bill_id": bill_id, "summary": summary, "total": total_sum, "method": method}
                 
                 if requests.post(SCRIPT_URL, json=payload, timeout=10).status_code == 200:
-                    st.session_state.receipt = generate_pdf(st.session_state.cart, total_sum, method, bill_id)
+                    st.session_state.receipt_pdf = generate_pdf(st.session_state.cart, total_sum, method, bill_id)
                     st.session_state.cart = {}
-                    st.success("บันทึกข้อมูลเรียบร้อย!")
+                    st.success("บันทึกแล้ว!")
                     st.rerun()
 
-        if st.session_state.receipt:
-            st.download_button("🖨️ พิมพ์ใบเสร็จ (PDF)", data=st.session_state.receipt, file_name="receipt.pdf", use_container_width=True)
-            if st.button("เริ่มการขายใหม่"):
-                st.session_state.receipt = None
+        if st.session_state.receipt_pdf:
+            st.download_button("🖨️ ดาวน์โหลดใบเสร็จ", data=st.session_state.receipt_pdf, file_name="bill.pdf", use_container_width=True)
+            if st.button("เริ่มขายใหม่"):
+                st.session_state.receipt_pdf = None
                 st.rerun()
 
 elif menu == "📊 ยอดขาย":
     st.title("📊 สรุปยอดขาย")
     df = load_data(CSV_SALES)
     if not df.empty:
+        # ✅ ค้นหาคอลัมน์ยอดรวมอัตโนมัติ
+        col = next((c for c in df.columns if 'ยอดรวม' in c or 'Total' in c), df.columns[-1])
+        st.metric("ยอดขายสะสม", f"{pd.to_numeric(df[col], errors='coerce').sum():,.2f} ฿")
         st.dataframe(df.iloc[::-1], use_container_width=True)
 
 elif menu == "📦 สต็อก":
-    st.title("📦 เช็คสต็อกสินค้า")
+    st.title("📦 สต็อกสินค้า")
     st.dataframe(load_data(CSV_STOCK), use_container_width=True)
