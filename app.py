@@ -94,15 +94,16 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# 5. PAGE: POS SYSTEM (FIXED STOCK ISSUE)
+# 5. PAGE: POS SYSTEM (เชื่อมข้อมูลสต็อกแบบเรียลไทม์)
 # ==========================================
 if choice == "🛒 หน้าขายสินค้า":
     df_p = POSDataEngine.fetch("products")
+    # ดึงข้อมูลจากชีต Stock โดยตรงเพื่อให้มั่นใจว่า "เรียลไทม์" ที่สุดก่อนขาย
     df_s = POSDataEngine.fetch("stock")
     
-    # ดึงสต็อกโดยใช้ Index (0 คือชื่อ, 1 คือจำนวน) เพื่อป้องกันหาชื่อคอลัมน์ไม่เจอ
     stock_map = {}
     if not df_s.empty:
+        # ใช้ Column Index 0 (ชื่อสินค้า) และ Index 1 (จำนวนคงเหลือ)
         stock_map = pd.Series(df_s.iloc[:, 1].values, index=df_s.iloc[:, 0].astype(str).str.strip()).to_dict()
 
     col_l, col_r = st.columns([2.3, 1.4])
@@ -118,7 +119,7 @@ if choice == "🛒 หน้าขายสินค้า":
                 p_price = float(row.iloc[1])
                 p_img = str(row.iloc[2]) if len(row) > 2 else ""
                 
-                # แก้จุดที่ทำให้สินค้าขึ้นว่าหมด: ตรวจสอบจากสต็อกแมพที่เราทำไว้ข้างบน
+                # ดึงค่าสต็อกที่เพิ่งโหลดมา (ทำให้หน้าขายกับหน้าสต็อกตรงกันเป๊ะ)
                 current_stock = int(stock_map.get(p_name, 0))
                 in_cart = st.session_state.cart.get(p_name, {}).get('qty', 0)
                 available = current_stock - in_cart
@@ -129,7 +130,7 @@ if choice == "🛒 หน้าขายสินค้า":
                         <div class="img-container"><img src="{p_img if p_img else 'https://via.placeholder.com/200'}"></div>
                         <div style="margin-top:10px; font-weight:600; height:30px;">{p_name}</div>
                         <div class="price-tag">{p_price:,.0f} ฿</div>
-                        <div class="stock-label">คงเหลือ: {available} ชิ้น</div>
+                        <div class="stock-label">คงเหลือในคลัง: {available} ชิ้น</div>
                     </div>
                     """, unsafe_allow_html=True)
                     
@@ -143,7 +144,6 @@ if choice == "🛒 หน้าขายสินค้า":
 
     with col_r:
         if st.session_state.last_receipt:
-            # --- RECEIPT VIEW (คงเดิม) ---
             res = st.session_state.last_receipt
             qr_url = f"https://promptpay.io/{PROMPTPAY_ID}/{res['total']}.png"
             receipt_html = f"""<div id="receipt-box" class="receipt-container"><center><h2 style="margin:0;">TAS PREMIUM SHOP</h2><small>เลขที่บิล: {res['bill_id']}</small><hr style="border-top:1px dashed #000;"></center><table style="width:100%; border-collapse: collapse;">{''.join([f'<tr><td style="padding:5px 0;">{k} x{v["qty"]}</td><td style="text-align:right;">{v["price"]*v["qty"]:,.0f}</td></tr>' for k,v in res['items'].items()])}</table><hr style="border-top:1px dashed #000;"><div style="display:flex; justify-content:space-between; font-size:20px; font-weight:bold;"><span>ยอดรวมสุทธิ</span><span>{res['total']:,.0f} ฿</span></div><div style="margin-top:10px; font-size:14px;">ชำระโดย: {res['method']}<br>{f"รับเงินสด: {res['cash']:,.2f} ฿<br>เงินทอน: {res['change']:,.2f} ฿" if res['method'] == "เงินสด" else ""}</div>{f'<center><div style="margin:15px 0;"><img src="{qr_url}" width="180"></div></center>' if res['method'] == "พร้อมเพย์" else ""}<hr style="border-top:1px dashed #000;"><center><small>{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}</small></center></div>"""
@@ -152,7 +152,6 @@ if choice == "🛒 หน้าขายสินค้า":
                 st.session_state.last_receipt = None
                 st.rerun()
         else:
-            # --- CART VIEW (คงเดิม) ---
             st.markdown("<h3 style='color:#D4AF37;'>🛒 ตะกร้าของฉัน</h3>", unsafe_allow_html=True)
             if not st.session_state.cart:
                 st.info("ตะกร้าว่างเปล่า...")
@@ -183,34 +182,36 @@ if choice == "🛒 หน้าขายสินค้า":
                         st.session_state.cart = {}; st.cache_data.clear(); st.rerun()
 
 # ==========================================
-# 6. PAGE: ANALYTICS (FIXED CRASH)
+# 6. PAGE: ANALYTICS (แก้ไขให้ใช้งานได้ 100%)
 # ==========================================
 elif choice == "📊 รายงานวิเคราะห์":
     st.markdown("<h2 style='color:#D4AF37;'>📊 วิเคราะห์ผลประกอบการ</h2>", unsafe_allow_html=True)
     df_sales = POSDataEngine.fetch("sales")
-    df_sum = POSDataEngine.fetch("summary")
     
     if df_sales.empty:
         st.info("ไม่พบข้อมูลการขาย...")
     else:
-        # แก้จุดบอด: ใช้ Index แทนชื่อคอลัมน์เพื่อคำนวณยอด
-        df_sales.iloc[:, 0] = pd.to_datetime(df_sales.iloc[:, 0], dayfirst=True, errors='coerce')
-        val_idx = 2 # คอลัมน์ยอดรวม (C)
-        date_idx = 0 # คอลัมน์วันที่ (A)
-        
-        now = datetime.now()
-        today_val = df_sales[df_sales.iloc[:, date_idx].dt.date == now.date()].iloc[:, val_idx].sum()
-        week_val = df_sales[df_sales.iloc[:, date_idx] >= (now - timedelta(days=7))].iloc[:, val_idx].sum()
-        month_val = df_sales[df_sales.iloc[:, date_idx].dt.month == now.month].iloc[:, val_idx].sum()
+        try:
+            date_idx = 0
+            val_idx = 2
+            df_sales.iloc[:, date_idx] = pd.to_datetime(df_sales.iloc[:, date_idx], dayfirst=True, errors='coerce')
+            now = datetime.now()
+            today_sales = df_sales[df_sales.iloc[:, date_idx].dt.date == now.date()]
+            today_val = today_sales.iloc[:, val_idx].sum()
+            week_sales = df_sales[df_sales.iloc[:, date_idx] >= (now - timedelta(days=7))]
+            week_val = week_sales.iloc[:, val_idx].sum()
+            month_sales = df_sales[df_sales.iloc[:, date_idx].dt.month == now.month]
+            month_val = month_sales.iloc[:, val_idx].sum()
 
-        m1, m2, m3 = st.columns(3)
-        m1.metric("ยอดขายวันนี้", f"{today_val:,.2f} ฿")
-        m2.metric("ยอดรวม 7 วัน", f"{week_val:,.2f} ฿")
-        m3.metric("ยอดรวมเดือนนี้", f"{month_val:,.2f} ฿")
-        
-        st.divider()
-        st.dataframe(df_sales.sort_values(by=df_sales.columns[0], ascending=False), use_container_width=True)
-
+            m1, m2, m3 = st.columns(3)
+            m1.metric("ยอดขายวันนี้", f"{today_val:,.2f} ฿")
+            m2.metric("ยอดรวม 7 วัน", f"{week_val:,.2f} ฿")
+            m3.metric("ยอดรวมเดือนนี้", f"{month_val:,.2f} ฿")
+            st.divider()
+            st.dataframe(df_sales.sort_values(by=df_sales.columns[0], ascending=False), use_container_width=True)
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการคำนวณ: {e}")
+            
 # ==========================================
 # 7. PAGE: STOCK MANAGEMENT (คงเดิม)
 # ==========================================
@@ -219,3 +220,4 @@ elif choice == "📦 สต็อก & คลัง":
     df_stock = POSDataEngine.fetch("stock")
     if not df_stock.empty:
         st.dataframe(df_stock, use_container_width=True, height=500)
+
