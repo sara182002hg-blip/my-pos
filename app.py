@@ -182,35 +182,56 @@ if choice == "🛒 หน้าขายสินค้า":
                         st.session_state.cart = {}; st.cache_data.clear(); st.rerun()
 
 # ==========================================
-# 6. PAGE: ANALYTICS (แก้ไขให้ใช้งานได้ 100%)
+# 6. PAGE: ANALYTICS (ฉบับแก้ไขด่วน - เจาะจงเฉพาะหน้านี้)
 # ==========================================
 elif choice == "📊 รายงานวิเคราะห์":
     st.markdown("<h2 style='color:#D4AF37;'>📊 วิเคราะห์ผลประกอบการ</h2>", unsafe_allow_html=True)
     df_sales = POSDataEngine.fetch("sales")
     
-    if df_sales.empty:
-        st.info("ไม่พบข้อมูลการขาย...")
+    if df_sales is None or df_sales.empty:
+        st.info("📢 ยังไม่มีข้อมูลการขายบันทึกในระบบ")
     else:
         try:
-            date_idx = 0
-            val_idx = 2
-            df_sales.iloc[:, date_idx] = pd.to_datetime(df_sales.iloc[:, date_idx], dayfirst=True, errors='coerce')
-            now = datetime.now()
-            today_sales = df_sales[df_sales.iloc[:, date_idx].dt.date == now.date()]
-            today_val = today_sales.iloc[:, val_idx].sum()
-            week_sales = df_sales[df_sales.iloc[:, date_idx] >= (now - timedelta(days=7))]
-            week_val = week_sales.iloc[:, val_idx].sum()
-            month_sales = df_sales[df_sales.iloc[:, date_idx].dt.month == now.month]
-            month_val = month_sales.iloc[:, val_idx].sum()
+            # 1. กำหนดตำแหน่งคอลัมน์ (Index) แทนการใช้ชื่อ
+            # ช่องที่ 0 = วันที่เวลา (A), ช่องที่ 2 = ยอดเงิน (C)
+            col_date = 0 
+            col_amount = 2 
 
+            # 2. แปลงข้อมูลวันที่ให้ Python อ่านออก
+            df_sales.iloc[:, col_date] = pd.to_datetime(df_sales.iloc[:, col_date], dayfirst=True, errors='coerce')
+            
+            # 3. เตรียมตัวแปรคำนวณ
+            now = datetime.now()
+            today_date = now.date()
+            
+            # คำนวณยอดขายวันนี้
+            today_total = df_sales[df_sales.iloc[:, col_date].dt.date == today_date].iloc[:, col_amount].sum()
+            
+            # คำนวณยอดขาย 7 วันล่าสุด
+            last_7_days = now - timedelta(days=7)
+            week_total = df_sales[df_sales.iloc[:, col_date] >= last_7_days].iloc[:, col_amount].sum()
+            
+            # คำนวณยอดขายเดือนนี้
+            month_total = df_sales[df_sales.iloc[:, col_date].dt.month == now.month].iloc[:, col_amount].sum()
+
+            # 4. แสดงผล Metric (สีทองสวยงามแบบเดิม)
             m1, m2, m3 = st.columns(3)
-            m1.metric("ยอดขายวันนี้", f"{today_val:,.2f} ฿")
-            m2.metric("ยอดรวม 7 วัน", f"{week_val:,.2f} ฿")
-            m3.metric("ยอดรวมเดือนนี้", f"{month_val:,.2f} ฿")
+            m1.metric("ยอดขายวันนี้", f"{today_total:,.2f} ฿")
+            m2.metric("ยอดรวม 7 วัน", f"{week_total:,.2f} ฿")
+            m3.metric("ยอดรวมเดือนนี้", f"{month_total:,.2f} ฿")
+            
             st.divider()
-            st.dataframe(df_sales.sort_values(by=df_sales.columns[0], ascending=False), use_container_width=True)
+            
+            # 5. แสดงตารางรายการขายทั้งหมด
+            st.markdown("### 📜 ประวัติการขายล่าสุด")
+            # จัดเรียงจากใหม่ไปเก่า
+            df_display = df_sales.sort_values(by=df_sales.columns[col_date], ascending=False)
+            st.dataframe(df_display, use_container_width=True)
+            
         except Exception as e:
-            st.error(f"เกิดข้อผิดพลาดในการคำนวณ: {e}")
+            # ถ้ายังไม่ได้อีก จะโชว์ Error บอกเราว่าผิดที่ตรงไหน
+            st.error(f"⚠️ การดึงข้อมูลผิดพลาด: {e}")
+            st.info("ตรวจสอบว่าใน Google Sheets (หน้า Sales) คอลัมน์ C คือยอดเงินใช่หรือไม่?")
             
 # ==========================================
 # 7. PAGE: STOCK MANAGEMENT (คงเดิม)
@@ -220,4 +241,5 @@ elif choice == "📦 สต็อก & คลัง":
     df_stock = POSDataEngine.fetch("stock")
     if not df_stock.empty:
         st.dataframe(df_stock, use_container_width=True, height=500)
+
 
