@@ -148,13 +148,54 @@ if choice == "🛒 หน้าขายสินค้า":
                 cash_received = 0.0
                 if pay_method == "เงินสด":
                     cash_received = st.number_input("รับเงิน", min_value=float(total_val), step=20.0)
-                if st.button("🚀 ยืนยันการขาย", type="primary", use_container_width=True):
-                    bill_id = f"POS{int(time.time())}"
-                    summary_text = ", ".join([f"{k}({v['qty']})" for k,v in st.session_state.cart.items()])
-                    if POSDataEngine.post_to_gsheet({"action": "checkout", "bill_id": bill_id, "summary": summary_text, "total": float(total_val), "method": pay_method}):
-                        st.session_state.last_receipt = {"bill_id": bill_id, "items": dict(st.session_state.cart), "total": total_val, "method": pay_method, "cash": cash_received, "change": cash_received - float(total_val)}
-                        st.session_state.cart = {}; st.cache_data.clear(); st.rerun()
+                # ประมาณบรรทัดที่ 150 ใน app.py ของพี่ครับ
+        if st.button("🚀 ยืนยันการขาย", use_container_width=True):
+            if not st.session_state.cart:
+                st.warning("กรุณาเลือกสินค้าก่อนครับ")
+            else:
+                # สร้างวันที่และเวลาปัจจุบัน (เพื่อให้ลงคอลัมน์ A และ B ใน Google Sheets)
+                now = datetime.now()
+                current_date = now.strftime("%d/%m/%Y")
+                current_time = now.strftime("%H:%M:%S")
+                bill_id = f"POS{int(time.time())}"
+                
+                summary_text = ", ".join([f"{k}({v['qty']})" for k, v in st.session_state.cart.items()])
+                total_val = sum(v['price'] * v['qty'] for v in st.session_state.cart.values())
 
+                with st.spinner("กำลังบันทึกข้อมูล..."):
+                    # ส่งค่า date และ time ไปให้ Apps Script
+                    payload = {
+                        "action": "checkout",
+                        "date": current_date,
+                        "time": current_time,
+                        "bill_id": bill_id,
+                        "total": float(total_val),
+                        "method": pay_method,
+                        "summary": summary_text
+                    }
+                    
+                    # เรียกใช้ URL จาก SCRIPT_URL (บรรทัดที่ 18 ของพี่)
+                    try:
+                        response = requests.post(SCRIPT_URL, json=payload)
+                        if response.status_code == 200:
+                            st.session_state.last_receipt = {
+                                "bill_id": bill_id,
+                                "date": current_date,
+                                "time": current_time,
+                                "items": dict(st.session_state.cart),
+                                "total": total_val,
+                                "method": pay_method,
+                                "cash": cash_received,
+                                "change": cash_received - total_val
+                            }
+                            st.session_state.cart = {}
+                            st.cache_data.clear()
+                            st.rerun()
+                        else:
+                            st.error("บันทึกไม่สำเร็จ (Server Error)")
+                    except Exception as e:
+                        st.error(f"การเชื่อมต่อผิดพลาด: {e}")
+                        
 # ==========================================
 # 6. PAGE: ANALYTICS (ปรับการดึงข้อมูลตามลำดับ A-F)
 # ==========================================
@@ -242,3 +283,4 @@ elif choice == "📦 สต็อก & คลัง":
             
     else:
         st.error("❌ ไม่สามารถเชื่อมต่อข้อมูลสต็อกได้ กรุณากด Sync Data ที่แถบด้านข้าง")
+
