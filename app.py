@@ -10,7 +10,7 @@ from fpdf import FPDF
 # --- 1. ตั้งค่าการเชื่อมต่อ ---
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycby8f3q4R9it3uGxTpcMlXR_nfsV1c9bJPXy3hJahIVZyAul1IHpY6JpsY5iGrg3_Czp/exec"
 STOCK_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=228640428&single=true&output=csv"
-# ✅ ใช้ gid=0 สำหรับหน้า Sales
+# ✅ บังคับใช้ gid=0 เพื่อดึงจากแผ่น Sales เท่านั้น
 SALES_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0ElOMhsfdJmgKAPBGsHwTicoVTrutHdZCLSA5hwuQymluTlvNM5OLd5wY_95LCe/pub?gid=0&single=true&output=csv"
 
 st.set_page_config(page_title="TAS POS Ultimate", layout="wide")
@@ -25,10 +25,10 @@ def load_data(url):
         return df
     except: return pd.DataFrame()
 
-# ✅ ฟังก์ชัน PDF: แก้ไข Error 'bytearray' และเพิ่ม QR Code
+# ✅ ฟังก์ชัน PDF: เพิ่ม QR Code และแก้ปัญหา Byte Error
 def generate_receipt_pdf(cart, total, method, bill_id):
     try:
-        pdf = FPDF(format=(80, 200))
+        pdf = FPDF(format=(80, 180)) 
         pdf.add_page()
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(60, 10, txt="TAS POS SYSTEM", ln=True, align='C')
@@ -46,14 +46,14 @@ def generate_receipt_pdf(cart, total, method, bill_id):
         pdf.cell(30, 10, txt="TOTAL:")
         pdf.cell(30, 10, txt=f"{total:,} THB", ln=True, align='R')
         
+        # ✅ ส่วนที่เพิ่ม: ใส่ QR Code ลงในใบเสร็จ
         if method == "QR Code":
             qr_url = f"https://promptpay.io/0945016189/{total}.png"
             pdf.ln(5)
-            pdf.cell(60, 5, txt="Scan to Pay", ln=True, align='C')
-            pdf.image(qr_url, x=15, w=50) 
+            pdf.cell(60, 5, txt="SCAN TO PAY", ln=True, align='C')
+            pdf.image(qr_url, x=15, y=pdf.get_y(), w=50) # วางรูป QR
             
-        # ส่งค่าออกแบบ bytes โดยตรงเพื่อเลี่ยง Error .encode()
-        return bytes(pdf.output(dest='S')) 
+        return pdf.output(dest='S') # ส่งค่า bytes โดยตรง
     except Exception as e: 
         st.error(f"PDF Error: {str(e)}")
         return None
@@ -122,16 +122,16 @@ elif menu == "📊 สรุปยอด & กำไร":
     df_sales = load_data(SALES_URL)
     if not df_sales.empty:
         try:
-            # ✅ ปรับการค้นหาคอลัมน์ให้ตรงกับ "ยอดรวม" ในชีตของคุณ
-            target_cols = [c for c in df_sales.columns if 'ยอดรวม' in c or 'Total' in c]
-            if target_cols:
-                col_name = target_cols[0]
+            # ✅ ค้นหาคำว่า "ยอดรวม" หรือ "Total_Amount" จากแผ่น Sales
+            col_search = [c for c in df_sales.columns if any(kw in c for kw in ['ยอดรวม', 'Total', 'Amount'])]
+            if col_search:
+                col_name = col_search[0]
                 total_val = pd.to_numeric(df_sales[col_name], errors='coerce').fillna(0).sum()
                 st.metric("ยอดขายรวมทั้งหมด", f"{total_val:,.2f} ฿")
                 st.subheader("📋 รายการล่าสุด")
                 st.dataframe(df_sales.iloc[::-1], use_container_width=True)
             else:
-                st.error("ไม่พบคอลัมน์ 'ยอดรวม' กรุณาตรวจสอบหัวตารางในหน้า Sales")
+                st.error("ไม่พบคอลัมน์ 'ยอดรวม' ในหน้า Sales")
                 st.dataframe(df_sales.head())
         except Exception as e: st.error(f"Error: {e}")
     else: st.info("ยังไม่มีข้อมูลในแผ่น Sales")
