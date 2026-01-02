@@ -68,21 +68,23 @@ if menu == "🛒 ขายสินค้า":
                         else:
                             st.button("❌ สินค้าหมด / ไม่พอ", key=f"out_{i}", use_container_width=True, disabled=True)
 
-    with col_right:
+  with col_right:
         if st.session_state.receipt:
             r = st.session_state.receipt
             st.subheader("📄 ใบเสร็จรับเงิน")
             with st.container(border=True):
-                # ดีไซน์ใบเสร็จพร้อม QR Code ในตัว
+                # ส่วนแสดงผลใบเสร็จ (ปรับแก้เพื่อให้ QR Code ฝังข้างในได้)
                 qr_html = ""
                 if r['method'] == "📱 PromptPay":
+                    # สร้างลิงก์ QR Code
+                    qr_url = f"https://promptpay.io/{MY_PROMPTPAY}/{r['total']}.png"
                     qr_html = f"""
                     <div style="text-align: center; margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
-                        <img src="https://promptpay.io/{MY_PROMPTPAY}/{r['total']}.png" width="250" style="border: 1px solid #ddd;"/>
+                        <img src="{qr_url}" width="250" style="border: 1px solid #ddd;"/>
                         <p style="font-size: 12px; color: #666; margin-top: 5px;">สแกนจ่ายเบอร์ {MY_PROMPTPAY}</p>
                     </div>
                     """
-                
+
                 st.markdown(f"""
                 <div style="background-color: white; color: black; padding: 30px; border-radius: 10px; font-family: 'Courier New', Courier, monospace; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                     <div style="text-align: center; margin-bottom: 20px;">
@@ -161,3 +163,4 @@ elif menu == "📦 สต็อก":
         st.dataframe(df_stock, use_container_width=True)
     else:
         st.error("ไม่สามารถโหลดข้อมูลสต็อกได้")
+
