@@ -12,7 +12,7 @@ URL_STOCK = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQh2Zc7U-GRR9SRp0El
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz36dYw2mJI2Nr4aqCLswtd4v4wq3AhleY_tFWfBRRSw2YwlyAzla55gclUVlHR2ulB/exec"
 MY_PROMPTPAY = "0945016189" 
 
-st.set_page_config(page_title="TAS POS Pro", layout="wide")
+st.set_page_config(page_title="TAS POS Professional", layout="wide")
 
 def load_data(url):
     try:
@@ -42,46 +42,48 @@ if menu == "🛒 ขายสินค้า":
                     with st.container(border=True):
                         st.markdown(f"### {row['Name']}")
                         st.markdown(f"**{row['Price']:,} ฿**")
-                        if st.button(f"➕ เพิ่ม", key=f"add_{i}", use_container_width=True):
+                        if st.button(f"➕ เพิ่มสินค้า", key=f"add_{i}", use_container_width=True):
                             name = row['Name']
                             st.session_state.cart[name] = st.session_state.cart.get(name, {'price': row['Price'], 'qty': 0})
                             st.session_state.cart[name]['qty'] += 1
-                            st.session_state.receipt = None # ปิดใบเสร็จเก่าเมื่อเริ่มเลือกใหม่
+                            st.session_state.receipt = None 
                             st.rerun()
 
     with col_right:
-        # กรณีที่ยังมีใบเสร็จค้างอยู่ (เพิ่งจ่ายเงินเสร็จ)
         if st.session_state.receipt:
             r = st.session_state.receipt
             st.subheader("📄 ใบเสร็จรับเงิน")
             with st.container(border=True):
+                # ดีไซน์ใบเสร็จใหม่
                 st.markdown(f"""
-                <div style="background-color: white; color: black; padding: 20px; border-radius: 5px; font-family: monospace;">
-                    <h3 style="text-align: center; margin:0;">RECEIPT</h3>
-                    <p style="text-align: center; font-size: 12px;">ID: {r['id']}</p>
-                    <hr style="border-top: 1px dashed black;">
-                    {''.join([f'<div style="display: flex; justify-content: space-between;"><span>{n} x{i["qty"]}</span><span>{i["price"]*i["qty"]:,}</span></div>' for n, i in r['items'].items()])}
-                    <hr style="border-top: 1px dashed black;">
-                    <div style="display: flex; justify-content: space-between; font-weight: bold;">
+                <div style="background-color: white; color: black; padding: 30px; border-radius: 10px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <h2 style="margin: 0; color: #333;">RECEIPT</h2>
+                        <p style="font-size: 12px; color: #666;">ID: {r['id']}</p>
+                    </div>
+                    <div style="border-top: 1px dashed #ccc; border-bottom: 1px dashed #ccc; padding: 15px 0; margin-bottom: 15px;">
+                        {''.join([f'<div style="display: flex; justify-content: space-between; margin-bottom: 5px;"><span>{n} x{i["qty"]}</span><span style="font-weight: bold;">{i["price"]*i["qty"]:,}</span></div>' for n, i in r['items'].items()])}
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 20px; font-weight: bold; margin-bottom: 5px;">
                         <span>TOTAL</span><span>{r['total']:,} ฿</span>
                     </div>
-                    <p style="font-size: 12px; margin-top: 10px;">Payment: {r['method']}</p>
+                    <p style="font-size: 12px; color: #888;">Payment: {r['method']}</p>
+                    <div style="text-align: center; margin-top: 20px;">
+                        {"<img src='https://promptpay.io/" + MY_PROMPTPAY + "/" + str(r['total']) + ".png' width='200' style='border: 1px solid #eee; padding: 5px;'/>" if r['method'] == "📱 PromptPay" else ""}
+                        <p style="font-size: 10px; color: #aaa; margin-top: 5px;">กด Ctrl + P เพื่อบันทึกเป็น PDF ({MY_PROMPTPAY})</p>
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                if r['method'] == "📱 PromptPay":
-                    st.image(f"https://promptpay.io/{MY_PROMPTPAY}/{r['total']}.png", caption="สแกนจ่าย 0945016189", width=200)
-                
-                st.info("💡 กด Ctrl+P เพื่อบันทึกเป็น PDF")
+                st.divider()
                 if st.button("✅ เริ่มการขายใหม่", use_container_width=True, type="primary"):
                     st.session_state.receipt = None
                     st.rerun()
         
-        # กรณีแสดงตะกร้าปกติ
         else:
             st.subheader("🛒 ตะกร้าสินค้า")
             if not st.session_state.cart:
-                st.write("ยังไม่มีสินค้าในตะกร้า")
+                st.info("ยังไม่มีสินค้าในตะกร้า")
             else:
                 total_sum = 0
                 for name, item in list(st.session_state.cart.items()):
@@ -123,7 +125,7 @@ elif menu == "📊 ยอดขาย":
         st.warning("ยังไม่มีข้อมูลยอดขาย")
 
 elif menu == "📦 สต็อก":
-    st.title("📦 สต็อกสินค้าคงเหลือ")
+    st.title("📦 สต็อกสินค้า")
     df_stock = load_data(URL_STOCK)
     if not df_stock.empty:
         st.dataframe(df_stock, use_container_width=True)
