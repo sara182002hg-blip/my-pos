@@ -83,4 +83,41 @@ if menu == "🛒 ขายสินค้า":
                 # ส่งข้อมูลไป Google Sheets
                 payload = {"action": "checkout", "bill_id": bill_id, "summary": summary, "total": total_sum, "method": pay_method}
                 try:
-                    if requests.post(SCRIPT_URL, json=payload).status_code == 200
+                    if requests.post(SCRIPT_URL, json=payload).status_code == 200:
+                        st.session_state.receipt = {"id": bill_id, "items": dict(st.session_state.cart), "total": total_sum, "method": pay_method}
+                        st.session_state.cart = {}
+                        st.rerun()
+                except: st.error("บันทึกข้อมูลไม่สำเร็จ")
+
+    # --- ส่วนแสดงใบเสร็จ ---
+    if st.session_state.receipt:
+        with st.expander("📄 ใบเสร็จล่าสุด", expanded=True):
+            r = st.session_state.receipt
+            st.markdown(f"<div style='text-align: center;'><h3>ใบเสร็จรับเงิน #{r['id']}</h3></div>", unsafe_allow_html=True)
+            for n, i in r['items'].items():
+                st.write(f"{n} x{i['qty']} : {i['price']*i['qty']:,} ฿")
+            st.divider()
+            st.subheader(f"ยอดรวมสุทธิ: {r['total']:,} ฿")
+            st.write(f"ช่องทาง: {r['method']}")
+            
+            if r['method'] == "📱 PromptPay":
+                # สร้าง QR PromptPay (ตัวอย่างลิงก์สร้าง QR)
+                st.image(f"https://promptpay.io/0812345678/{r['total']}.png", caption="สแกนเพื่อจ่ายเงิน", width=200)
+            
+            if st.button("ปิดใบเสร็จ"): 
+                st.session_state.receipt = None
+                st.rerun()
+
+elif menu == "📊 ยอดขาย":
+    st.title("📊 รายงานยอดขาย")
+    df_sales = load_data(URL_SALES)
+    if not df_sales.empty:
+        st.dataframe(df_sales.iloc[::-1], use_container_width=True)
+    else:
+        st.info("ยังไม่มีข้อมูลยอดขาย")
+
+elif menu == "📦 สต็อก":
+    st.title("📦 สต็อกสินค้าคงเหลือ")
+    df_stock = load_data(URL_STOCK)
+    if not df_stock.empty:
+        st.dataframe(df_stock, use_container_width=True)
