@@ -24,54 +24,27 @@ st.set_page_config(page_title="TAS POS ULTIMATE V21", layout="wide", initial_sid
 # ==========================================
 st.markdown(f"""
 <style>
-    /* Global Styles */
-    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@200;400;600&display=swap');
-    * {{ font-family: 'Kanit', sans-serif; }}
-    .stApp {{ background-color: #050505; color: #E0E0E0; }}
-    
-    /* Sidebar */
-    [data-testid="stSidebar"] {{ background: linear-gradient(180deg, #111, #000); border-right: 1px solid #333; }}
-    
-    /* Custom Product Cards */
-    .product-box {{
-        background: rgba(28, 33, 40, 0.8);
-        border: 1px solid #30363D;
-        border-radius: 18px;
-        padding: 15px;
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        text-align: center;
-        backdrop-filter: blur(10px);
-    }}
-    .product-box:hover {{
-        border-color: #D4AF37;
-        transform: scale(1.03);
-        box-shadow: 0 10px 20px rgba(212, 175, 55, 0.2);
-    }}
-    .img-container img {{ width: 100%; height: 180px; object-fit: cover; border-radius: 12px; }}
-    
-    /* Price and Text */
-    .price-tag {{ font-size: 24px; color: #D4AF37; font-weight: 600; margin: 10px 0; }}
-    .stock-label {{ font-size: 12px; color: #888; }}
-    
-    /* Button Premium */
-    .stButton>button {{
-        background: linear-gradient(90deg, #D4AF37, #F1D279);
-        color: black !important; border: none; border-radius: 10px;
-        font-weight: 600; transition: 0.3s; width: 100%; height: 45px;
-    }}
-    .stButton>button:hover {{ transform: translateY(-2px); box-shadow: 0 5px 15px rgba(212,175,55,0.4); }}
-    
-    /* Metric Cards */
-    div[data-testid="metric-container"] {{
-        background: #161B22; border: 1px solid #30363D; border-radius: 15px; padding: 20px;
-    }}
-    [data-testid="stMetricValue"] {{ color: #D4AF37 !important; font-size: 32px !important; }}
-    
-    /* Receipt Styles */
-    .receipt-container {{
-        background: #FFF; color: #000; padding: 30px; border-radius: 10px;
-        box-shadow: 0 0 20px rgba(255,255,255,0.1); font-family: 'Courier New', Courier, monospace;
-    }}
+    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@200;400;600&display=swap');
+    * {{ font-family: 'Kanit', sans-serif; }}
+    .stApp {{ background-color: #050505; color: #E0E0E0; }}
+    [data-testid="stSidebar"] {{ background: linear-gradient(180deg, #111, #000); border-right: 1px solid #333; }}
+    .product-box {{
+        background: rgba(28, 33, 40, 0.8);
+        border: 1px solid #30363D;
+        border-radius: 18px;
+        padding: 15px;
+        text-align: center;
+        backdrop-filter: blur(10px);
+    }}
+    .price-tag {{ font-size: 24px; color: #D4AF37; font-weight: 600; margin: 10px 0; }}
+    .stButton>button {{
+        background: linear-gradient(90deg, #D4AF37, #F1D279);
+        color: black !important; border-radius: 10px; font-weight: 600; width: 100%;
+    }}
+    .receipt-container {{
+        background: #FFF; color: #000; padding: 30px; border-radius: 10px;
+        font-family: 'Courier New', Courier, monospace;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -217,82 +190,25 @@ if choice == "🛒 หน้าขายสินค้า":
                         st.rerun()
                     else:
                         st.error("บันทึกไม่สำเร็จ!")
-                        
+
 # ==========================================
-# 6. PAGE: ANALYTICS (DEEP INSIGHT)
+# 6. PAGE: ANALYTICS
 # ==========================================
 elif choice == "📊 รายงานวิเคราะห์":
-    st.markdown("<h2 style='color:#D4AF37;'>📊 วิเคราะห์ผลประกอบการ</h2>", unsafe_allow_html=True)
-    df_sales = POSDataEngine.fetch("sales")
-    df_sum = POSDataEngine.fetch("summary")
-    
-    if df_sales.empty:
-        st.info("ไม่พบข้อมูลการขายในขณะนี้")
-    else:
-        # Preprocessing Dates
-        df_sales.iloc[:, 0] = pd.to_datetime(df_sales.iloc[:, 0], dayfirst=True, errors='coerce')
-        val_col = df_sales.columns[2]
-        date_col = df_sales.columns[0]
-        
-        now = datetime.now()
-        today = now.date()
-        today_str = now.strftime("%d/%m/%Y")
-        
-        # Checking Daily Summary Status
-        is_closed = False
-        if not df_sum.empty:
-            is_closed = not df_sum[df_sum.iloc[:,0].astype(str).str.contains(today_str)].empty
-        
-        # Aggregations
-        today_val = df_sales[df_sales[date_col].dt.date == today][val_col].sum()
-        week_val = df_sales[df_sales[date_col] >= (now - timedelta(days=7))][val_col].sum()
-        month_val = df_sales[df_sales[date_col].dt.month == now.month][val_col].sum()
-
-        m1, m2, m3 = st.columns(3)
-        m1.metric("ยอดขายวันนี้", f"{0 if is_closed else today_val:,.2f} ฿", delta="CLOSED" if is_closed else "ACTIVE")
-        m2.metric("ยอดรวม 7 วัน", f"{week_val:,.2f} ฿")
-        m3.metric("ยอดรวมเดือนนี้", f"{month_val:,.2f} ฿")
-        
-        st.divider()
-        
-        tab1, tab2 = st.tabs(["📉 ประวัติรายการขาย", "📝 บันทึกสรุปยอดปิดวัน"])
-        
-        with tab1:
-            st.dataframe(df_sales.sort_values(by=date_col, ascending=False), use_container_width=True)
-            
-        with tab2:
-            if is_closed:
-                st.success(f"✅ วันนี้ ({today_str}) สรุปยอดปิดวันเรียบร้อยแล้ว")
-            else:
-                st.warning("⚠️ โปรดตรวจสอบข้อมูลก่อนกด 'ปิดยอดวัน' ยอดวันนี้จะถูกย้ายเข้าสู่ DailySummary และรีเซ็ตหน้าจอ")
-                if st.button("Confirm: บันทึกปิดยอดวันนี้"):
-                    with st.spinner("Saving summary..."):
-                        ok = POSDataEngine.post_to_gsheet({
-                            "action": "save_summary",
-                            "date": today_str,
-                            "total": float(today_val),
-                            "bills": len(df_sales[df_sales[date_col].dt.date == today])
-                        })
-                        if ok:
-                            st.success("บันทึกสำเร็จ!")
-                            st.cache_data.clear()
-                            time.sleep(1)
-                            st.rerun()
+    st.markdown("<h2 style='color:#D4AF37;'>📊 วิเคราะห์ยอดขาย</h2>", unsafe_allow_html=True)
+    df_sales = POSDataEngine.fetch("sales")
+    if not df_sales.empty:
+        st.dataframe(df_sales, use_container_width=True)
+    else:
+        st.info("ไม่พบข้อมูลการขาย")
 
 # ==========================================
 # 7. PAGE: STOCK MANAGEMENT
 # ==========================================
 elif choice == "📦 สต็อก & คลัง":
-    st.markdown("<h2 style='color:#D4AF37;'>📦 คลังสินค้าออนไลน์</h2>", unsafe_allow_html=True)
-    df_stock = POSDataEngine.fetch("stock")
-    
-    if not df_stock.empty:
-        # Highlight low stock
-        def highlight_low(s):
-            return ['background-color: #5b2121' if v < 10 else '' for v in s]
-        
-        st.write("รายการสินค้าในระบบทั้งหมด (ดึงข้อมูลล่าสุดจาก Cloud)")
-        st.dataframe(df_stock, use_container_width=True, height=500)
-    else:
-        st.error("ไม่สามารถเชื่อมต่อข้อมูลสต็อกได้")
-
+    st.markdown("<h2 style='color:#D4AF37;'>📦 คลังสินค้า</h2>", unsafe_allow_html=True)
+    df_stock = POSDataEngine.fetch("stock")
+    if not df_stock.empty:
+        st.dataframe(df_stock, use_container_width=True)
+    else:
+        st.error("โหลดข้อมูลสต็อกไม่ได้")
