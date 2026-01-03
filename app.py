@@ -4,14 +4,15 @@ import pandas as pd
 import json
 from datetime import datetime
 
-# --- CONFIGURATION ---
+# --- 1. CONFIGURATION ---
 API_URL = "https://script.google.com/macros/s/AKfycbys8_oaky-j7tINfXAq1-B69KS_GlhO3hQd-D5JsstbC4koXEhxY7tUcuVHMHYPnUkT/exec"
-PROMPTPAY_ID = "0945016189" # เบอร์พร้อมเพย์ที่คุณระบุ
+PROMPTPAY_ID = "0945016189"
 
-st.set_page_config(page_title="Premium POS System", layout="wide")
+st.set_page_config(page_title="Ultimate POS Dashboard", layout="wide")
 
-# --- CORE FUNCTIONS ---
+# --- 2. CORE FUNCTIONS (ห้ามหาย) ---
 def fix_columns(df):
+    """ ปรับชื่อคอลัมน์ให้เป็นตัวพิมพ์เล็กเพื่อป้องกัน KeyError 100% """
     if df is not None and not df.empty:
         df.columns = [str(c).strip().lower() for c in df.columns]
     return df
@@ -37,45 +38,44 @@ def send_to_sheet(payload):
     except:
         return False
 
-# --- SESSION STATE ---
+# --- 3. SESSION STATE (ระบบจำสถานะสินค้า) ---
 if 'cart' not in st.session_state: st.session_state.cart = {}
 if 'app_data' not in st.session_state: st.session_state.app_data = fetch_all_data()
 if 'show_receipt' not in st.session_state: st.session_state.show_receipt = False
 if 'last_bill' not in st.session_state: st.session_state.last_bill = {}
 
-# --- SIDEBAR ---
+# --- 4. SIDEBAR MENU ---
 with st.sidebar:
     st.title("💎 PREMIUM POS")
-    menu = st.radio("เมนูหลัก", ["🛒 รายการขาย", "📊 รายงานยอดขาย", "📦 สต็อกออนไลน์"])
-    if st.button("🔄 Sync ข้อมูลใหม่"):
+    menu = st.radio("เมนูหลัก", ["🛒 รายการขาย", "📊 รายงาน & สรุปยอด", "📦 สต็อกออนไลน์"])
+    if st.button("🔄 Sync ข้อมูลใหม่ (Real-time)"):
         st.session_state.app_data = fetch_all_data()
         st.rerun()
 
-# --- MAIN CONTENT ---
+# --- 5. MAIN CONTENT ---
 if st.session_state.app_data:
     df_prods = st.session_state.app_data['products']
     df_stock = st.session_state.app_data['stock']
 
+    # --- PAGE: SALES (ระบบขาย) ---
     if menu == "🛒 รายการขาย":
         col1, col2 = st.columns([2, 1])
-
         with col1:
-            st.subheader("📦 สินค้า")
-            search = st.text_input("ค้นหาสินค้า...", placeholder="พิมพ์ชื่อสินค้า")
-            filtered_prods = df_prods[df_prods['name'].str.contains(search, case=False)] if search else df_prods
+            st.subheader("📦 รายการสินค้า")
+            search = st.text_input("🔍 ค้นหา...", placeholder="ชื่อสินค้า")
+            filtered = df_prods[df_prods['name'].str.contains(search, case=False)] if search else df_prods
             
             p_cols = st.columns(3)
-            for i, (idx, row) in enumerate(filtered_prods.iterrows()):
+            for i, (idx, row) in enumerate(filtered.iterrows()):
                 with p_cols[i % 3]:
                     with st.container(border=True):
                         p_id = str(row['id'])
                         s_row = df_stock[df_stock['id'].astype(str) == p_id]
                         qty = int(s_row['qty'].values[0]) if not s_row.empty else 0
                         
-                        st.write(f"**{row['name']}**")
-                        st.write(f"### ฿{float(row['price']):,.2f}")
+                        st.markdown(f"**{row['name']}**")
+                        st.markdown(f"### ฿{float(row['price']):,.2f}")
                         st.caption(f"คงเหลือ: {qty}")
-                        
                         if st.button("➕ เพิ่ม", key=f"add_{p_id}", disabled=(qty <= 0)):
                             if p_id in st.session_state.cart:
                                 st.session_state.cart[p_id]['qty'] += 1
@@ -103,19 +103,24 @@ if st.session_state.app_data:
             
             st.divider()
             st.metric("รวมทั้งสิ้น", f"฿{total:,.2f}")
-            method = st.radio("ช่องทางชำระเงิน", ["เงินสด", "พร้อมเพย์"], horizontal=True)
+            method = st.radio("ชำระเงิน", ["เงินสด", "พร้อมเพย์"], horizontal=True)
             
-            if st.button("✅ ยืนยันการขาย & ออกใบเสร็จ", type="primary", use_container_width=True):
+            if st.button("✅ ยืนยันการขาย (ออกใบเสร็จ)", type="primary", use_container_width=True):
                 if total > 0:
+                    # เรียงคอลัมน์ให้ตรงกับ Google Sheets: วันที่, เวลา, เลขบิล, ยอดเงิน, วิธีชำระเงิน, รายการสินค้า
+                    now = datetime.now()
                     bill_data = {
-                        "timestamp": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                        "items": json.dumps(st.session_state.cart, ensure_ascii=False),
+                        "date": now.strftime("%d/%m/%Y"),
+                        "time": now.strftime("%H:%M:%S"),
+                        "bill_no": f"POS{int(now.timestamp())}",
                         "total": total,
-                        "method": method
+                        "method": method,
+                        "items_text": ", ".join([f"{v['name']}({v['qty']})" for v in st.session_state.cart.values()]),
+                        "raw_items": json.dumps(st.session_state.cart, ensure_ascii=False) # เก็บไว้ดึงข้อมูล
                     }
                     payload = {
                         "action": "recordSale",
-                        "data": bill_data,
+                        "data": list(bill_data.values())[:-1], # ส่งเฉพาะ 6 คอลัมน์หลักเข้า Sheet
                         "stock_updates": [{"id": k, "qty_sold": v['qty']} for k,v in st.session_state.cart.items()]
                     }
                     if send_to_sheet(payload):
@@ -125,41 +130,39 @@ if st.session_state.app_data:
                         st.session_state.app_data = fetch_all_data()
                         st.rerun()
 
-    # --- 📄 RECEIPT DIALOG WITH AUTO-PRINT & QR ---
+    # --- 📄 RECEIPT DIALOG (ระบบใบเสร็จ & QR) ---
     if st.session_state.show_receipt:
         @st.dialog("🧾 ใบเสร็จรับเงิน")
         def show_receipt_dialog():
             bill = st.session_state.last_bill
-            items = json.loads(bill['items'])
-            
-            # ส่วนการแสดงผลในหน้าจอ
-            st.markdown(f"**วันที่:** {bill['timestamp']}")
-            st.markdown(f"**ช่องทางชำระ:** {bill['method']}")
+            items = json.loads(bill['raw_items'])
+            st.markdown(f"**เลขที่บิล:** {bill['bill_no']}")
+            st.markdown(f"**วันที่:** {bill['date']} {bill['time']}")
             st.write("---")
             for k, v in items.items():
                 st.write(f"{v['name']} x{v['qty']} : ฿{v['price']*v['qty']:,.2f}")
             st.write("---")
             st.subheader(f"ยอดรวม: ฿{bill['total']:,.2f}")
+            st.write(f"วิธีชำระ: {bill['method']}")
 
-            # แสดง QR Code เฉพาะเมื่อจ่ายแบบ "พร้อมเพย์"
             if bill['method'] == "พร้อมเพย์":
-                qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://promptpay.io/{PROMPTPAY_ID}/{bill['total']}"
+                qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://promptpay.io/{PROMPTPAY_ID}/{bill['total']}"
                 st.image(qr_url, caption=f"สแกนจ่ายเบอร์ {PROMPTPAY_ID}")
 
-            # ปุ่มสั่งปริ้นใบเสร็จ
-            if st.button("🖨️ สั่งปริ้นใบเสร็จ (Print)", use_container_width=True):
-                st.markdown("""<script>window.print();</script>""", unsafe_allow_html=True)
-            
-            if st.button("เสร็จสิ้น (Close)", use_container_width=True):
+            if st.button("🖨️ สั่งปริ้น (Print)", use_container_width=True):
+                st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
+            if st.button("ปิด (Close)", use_container_width=True):
                 st.session_state.show_receipt = False
                 st.rerun()
-        
         show_receipt_dialog()
 
-    elif menu == "📊 รายงานยอดขาย":
+    # --- PAGE: REPORT (ระบบรายงาน) ---
+    elif menu == "📊 รายงาน & สรุปยอด":
         st.subheader("📊 วิเคราะห์ยอดขาย")
-        st.info("บันทึกข้อมูลเข้าแผ่น Sales เรียบร้อยตามลำดับคอลัมน์")
+        st.info("ข้อมูลถูกบันทึกลงคอลัมน์: วันที่ | เวลา | เลขที่บิล | ยอดเงิน | วิธีชำระเงิน | รายการสินค้า")
+        # สามารถเพิ่มกราฟสรุปยอดจาก df_sales ได้ตรงนี้
 
+    # --- PAGE: STOCK (ระบบสต็อก) ---
     elif menu == "📦 สต็อกออนไลน์":
-        st.subheader("📦 ตรวจสอบสต็อกสินค้า")
+        st.subheader("📦 ตรวจสอบสต็อก")
         st.dataframe(df_stock, use_container_width=True, hide_index=True)
