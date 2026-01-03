@@ -1,3 +1,5 @@
-fpdf2
+pip install
+customtkinter
 requests
-pandas
+pillow
+qrcode[pil]
