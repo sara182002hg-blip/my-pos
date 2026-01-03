@@ -1,4 +1,4 @@
-customtkinter
+streamlit
 requests
-pillow
-qrcode[pil]
+pandas
+qrcode
