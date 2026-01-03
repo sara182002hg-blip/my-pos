@@ -184,19 +184,40 @@ if choice == "🛒 หน้าขายสินค้า":
                             st.rerun()
                 st.markdown(f"## {total_val:,.0f} ฿")
                 pay_method = st.radio("ชำระ", ["เงินสด", "พร้อมเพย์"], horizontal=True)
-                if st.button("🚀 ยืนยันการขาย", type="primary"):
-                    bill_id = f"POS{int(time.time())}"
-                    summary_text = ", ".join([f"{k}({v['qty']})" for k,v in st.session_state.cart.items()])
-                    with st.spinner("บันทึก..."):
-                        success = POSDataEngine.post_to_gsheet({
-                            "action": "checkout", "bill_id": bill_id, "summary": summary_text,
-                            "total": float(total_val), "method": pay_method
-                        })
-                        if success:
-                            st.session_state.last_receipt = {"bill_id": bill_id, "items": dict(st.session_state.cart), "total": total_val, "method": pay_method}
-                            st.session_state.cart = {}
-                            st.cache_data.clear()
-                            st.rerun()
+                if st.button("🚀 ยืนยันการขายและออกใบเสร็จ", type="primary"):
+    bill_id = f"POS{int(time.time())}"
+    
+    # สร้างวันที่และเวลาแยกกันตามที่ Apps Script ต้องการ
+    now = datetime.now()
+    current_date = now.strftime("%d/%m/%Y") # สำหรับ Column A
+    current_time = now.strftime("%H:%M:%S") # สำหรับ Column B
+    
+    summary_text = ", ".join([f"{k}({v['qty']})" for k,v in st.session_state.cart.items()])
+    
+    with st.spinner("📦 กำลังตัดสต็อกและบันทึกข้อมูล..."):
+        success = POSDataEngine.post_to_gsheet({
+            "action": "checkout",
+            "date": current_date,    # ส่งวันที่ไป (A)
+            "time": current_time,    # ส่งเวลาไป (B)
+            "bill_id": bill_id,      # (C)
+            "total": float(total_val),# (D)
+            "method": pay_method,    # (E)
+            "summary": summary_text  # (F)
+        })
+        
+        if success:
+            # เก็บข้อมูลไว้แสดงในใบเสร็จ
+            st.session_state.last_receipt = {
+                "bill_id": bill_id,
+                "items": dict(st.session_state.cart),
+                "total": total_val,
+                "method": pay_method,
+                "cash": cash_received,
+                "change": cash_received - float(total_val)
+            }
+            st.session_state.cart = {}
+            st.cache_data.clear()
+            st.rerun()
 
 # ==========================================
 # 6. PAGE: ANALYTICS
@@ -217,3 +238,4 @@ elif choice == "📦 สต็อก & คลัง":
     df_stock = POSDataEngine.fetch("stock")
     if not df_stock.empty:
         st.dataframe(df_stock, use_container_width=True)
+
