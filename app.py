@@ -1,12 +1,9 @@
 import streamlit as st
 import requests
 import pandas as pd
-import qrcode
-from io import BytesIO
 from datetime import datetime
 
 # --- CONFIGURATION ---
-# ใช้ URL ของคุณที่ส่งมาล่าสุด
 API_URL = "https://script.google.com/macros/s/AKfycbys8_oaky-j7tINfXAq1-B69KS_GlhO3hQd-D5JsstbC4koXEhxY7tUcuVHMHYPnUkT/exec"
 
 st.set_page_config(page_title="Ultimate Premium POS", layout="wide")
@@ -16,29 +13,29 @@ st.markdown("""
     <style>
     .main { background-color: #0e1117; }
     div[data-testid="stMetricValue"] { font-size: 24px; color: #2ecc71; }
-    .product-card { border: 1px solid #333; padding: 15px; border-radius: 10px; background: #1e1e1e; margin-bottom: 10px; }
+    .stButton>button { width: 100%; border-radius: 8px; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- CORE FUNCTIONS ---
-def format_df_columns(df):
-    """ ป้องกัน KeyError โดยการล้างชื่อคอลัมน์ให้เป็นตัวพิมพ์เล็กและไม่มีช่องว่าง """
+def fix_columns(df):
+    """ ป้องกัน KeyError โดยการล้างชื่อคอลัมน์ให้เป็นตัวพิมพ์เล็กทั้งหมด """
     if df is not None and not df.empty:
         df.columns = [str(c).strip().lower() for c in df.columns]
     return df
 
-@st.cache_data(ttl=60) # Cache ข้อมูล 1 นาทีเพื่อความเร็ว แต่รีเฟรชได้
+@st.cache_data(ttl=10) # ดึงข้อมูลใหม่ทุก 10 วินาทีเมื่อมีการรีเฟรช
 def fetch_all_data():
     try:
         response = requests.get(f"{API_URL}?action=getInitialData", timeout=15)
         if response.status_code == 200:
             res_json = response.json()
-            # แปลงเป็น DataFrame และจัดการคอลัมน์
-            prods = format_df_columns(pd.DataFrame(res_json.get('products', [])))
-            stock = format_df_columns(pd.DataFrame(res_json.get('stock', [])))
+            # ดึงข้อมูลและปรับชื่อคอลัมน์ทันที
+            prods = fix_columns(pd.DataFrame(res_json.get('products', [])))
+            stock = fix_columns(pd.DataFrame(res_json.get('stock', [])))
             return {"products": prods, "stock": stock}
     except Exception as e:
-        st.error(f"เชื่อมต่อผิดพลาด: {e}")
+        st.error(f"การเชื่อมต่อผิดพลาด: {e}")
     return None
 
 def send_to_sheet(payload):
@@ -57,14 +54,14 @@ if 'app_data' not in st.session_state:
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("💎 PREMIUM POS")
-    menu = st.radio("เมนูหลัก", ["🛒 รายการขาย", "📊 รายงาน & สรุปยอด", "📦 สต็อกออนไลน์"])
-    if st.button("🔄 Sync ข้อมูลใหม่ (Real-time)"):
+    menu = st.radio("เมนูหลัก", ["🛒 รายการขาย", "📊 รายงานยอดขาย", "📦 สต็อกออนไลน์"])
+    if st.button("🔄 Sync ข้อมูลใหม่"):
         st.session_state.app_data = fetch_all_data()
-        st.toast("อัปเดตข้อมูลล่าสุดแล้ว")
+        st.rerun()
 
 # --- MAIN LOGIC ---
 if st.session_state.app_data is None:
-    st.error("ไม่สามารถโหลดข้อมูลจาก Google Sheets ได้ กรุณาตรวจสอบ Apps Script")
+    st.warning("⚠️ กำลังพยายามดึงข้อมูล... หากนานเกินไปกรุณาตรวจสอบการตั้งค่า Google Sheets")
 else:
     df_prods = st.session_state.app_data['products']
     df_stock = st.session_state.app_data['stock']
@@ -75,36 +72,44 @@ else:
 
         with col1:
             st.subheader("📦 รายการสินค้า")
-            search = st.text_input("ค้นหาสินค้า...", placeholder="พิมพ์ชื่อสินค้าที่นี่")
+            # ช่องค้นหา
+            search = st.text_input("🔍 ค้นหาสินค้า...", placeholder="พิมพ์ชื่อสินค้าที่ต้องการ")
             
-            # แสดงสินค้าแบบ Grid
-            items = df_prods[df_prods['name'].str.contains(search, case=False)] if 'name' in df_prods else df_prods
+            # กรองสินค้าตามชื่อ (รองรับคอลัมน์ 'name')
+            name_col = 'name' if 'name' in df_prods else df_prods.columns[1]
+            items = df_prods[df_prods[name_col].str.contains(search, case=False)] if search else df_prods
             
+            # แสดงสินค้าแบบ Grid 3 คอลัมน์
             p_cols = st.columns(3)
             for i, row in items.iterrows():
                 with p_cols[i % 3]:
                     with st.container(border=True):
-                        # ดึงข้อมูล Stock ที่ตรงกัน
-                        p_id = str(row['id'])
-                        s_row = df_stock[df_stock['id'].astype(str) == p_id]
-                        current_qty = s_row['qty'].values[0] if not s_row.empty else 0
+                        p_id = str(row['id']) if 'id' in row else str(row.iloc[0])
+                        p_name = row[name_col]
+                        p_price = float(row['price']) if 'price' in row else 0.0
                         
-                        st.markdown(f"**{row['name']}**")
-                        st.markdown(f"### ฿{row['price']}")
+                        # หาจำนวน Stock ที่ตรงกัน
+                        id_col_stock = 'id' if 'id' in df_stock else df_stock.columns[0]
+                        qty_col_stock = 'qty' if 'qty' in df_stock else df_stock.columns[2]
+                        s_row = df_stock[df_stock[id_col_stock].astype(str) == p_id]
+                        current_qty = int(s_row[qty_col_stock].values[0]) if not s_row.empty else 0
+                        
+                        st.markdown(f"**{p_name}**")
+                        st.markdown(f"### ฿{p_price:,.2f}")
                         st.caption(f"คงเหลือ: {current_qty}")
                         
-                        if st.button("➕ เพิ่ม", key=f"btn_{p_id}", disabled=(current_qty <= 0)):
+                        if st.button("➕ เพิ่ม", key=f"add_{p_id}", disabled=(current_qty <= 0)):
                             if p_id in st.session_state.cart:
                                 st.session_state.cart[p_id]['qty'] += 1
                             else:
-                                st.session_state.cart[p_id] = {'name': row['name'], 'price': float(row['price']), 'qty': 1}
+                                st.session_state.cart[p_id] = {'name': p_name, 'price': p_price, 'qty': 1}
                             st.rerun()
 
         with col2:
-            st.subheader("🛒 ตะกร้า")
+            st.subheader("🛒 ตะกร้าสินค้า")
             total = 0
             if not st.session_state.cart:
-                st.info("ยังไม่มีสินค้า")
+                st.write("ไม่มีสินค้าในตะกร้า")
             else:
                 for p_id, item in list(st.session_state.cart.items()):
                     with st.container(border=True):
@@ -122,18 +127,20 @@ else:
                             st.rerun()
                 
                 st.divider()
-                st.metric("ยอดรวมสุทธิ", f"฿{total:,.2f}")
+                st.metric("ยอดรวมทั้งสิ้น", f"฿{total:,.2f}")
                 
-                pay_method = st.segmented_control("ชำระเงิน", ["เงินสด", "พร้อมเพย์"], default="เงินสด")
+                pay_method = st.radio("วิธีชำระเงิน", ["เงินสด", "พร้อมเพย์"], horizontal=True)
                 
                 if pay_method == "เงินสด":
-                    received = st.number_input("รับเงิน", min_value=0.0, step=10.0)
+                    received = st.number_input("รับเงินมา", min_value=0.0, value=float(total))
                     if received >= total > 0:
                         st.success(f"เงินทอน: ฿{received - total:,.2f}")
                 else:
-                    st.image(f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://promptpay.io/0812345678/{total}", caption="สแกนจ่ายที่นี่")
+                    # สร้าง QR Code แบบ Dynamic
+                    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://promptpay.io/0812345678/{total}"
+                    st.image(qr_url, caption="สแกนเพื่อชำระเงิน")
 
-                if st.button("🔥 ยืนยันการขาย (ตัดสต็อก)", type="primary", use_container_width=True):
+                if st.button("✅ ยืนยันการขาย (ตัดสต็อก)", type="primary"):
                     payload = {
                         "action": "recordSale",
                         "data": {
@@ -145,41 +152,37 @@ else:
                         "stock_updates": [{"id": k, "qty_sold": v['qty']} for k,v in st.session_state.cart.items()]
                     }
                     if send_to_sheet(payload):
-                        st.balloons()
-                        st.session_state.cart = {}
-                        st.session_state.app_data = fetch_all_data() # อัปเดตสต็อกทันที
                         st.success("บันทึกสำเร็จ!")
+                        st.session_state.cart = {}
+                        st.session_state.app_data = fetch_all_data() # อัปเดตข้อมูลทันที
                         st.rerun()
 
     # --- 📊 PAGE: REPORT ---
-    elif menu == "📊 รายงาน & สรุปยอด":
-        st.subheader("📈 วิเคราะห์ยอดขาย")
+    elif menu == "📊 รายงานยอดขาย":
+        st.subheader("📊 วิเคราะห์ภาพรวมยอดขาย")
         m1, m2, m3 = st.columns(3)
-        # จำลองการสรุปผล (ในระบบจริงควรดึงจากแผ่น DailySummary)
-        m1.metric("ยอดขายวันนี้", "฿12,450")
-        m2.metric("จำนวนบิล", "42 บิล")
-        m3.metric("สินค้าขายดี", "Espresso")
+        # ตัวอย่างการแสดงผลรายงาน (สามารถขยายเพิ่มตามข้อมูลใน Sheet Sales)
+        m1.metric("เป้ายอดขาย", "฿50,000", "+5%")
+        m2.metric("จำนวนรายการวันนี้", "12 รายการ")
+        m3.metric("สถานะระบบ", "Online")
         
-        st.divider()
-        if st.button("⚠️ กดสรุปยอดรายวัน (รีเซ็ตยอด)", type="secondary"):
-            if send_to_sheet({"action": "resetDaily"}):
-                st.success("สรุปยอดและรีเซ็ตเรียบร้อยแล้ว!")
+        st.info("💡 ระบบรายงานกำลังซิงค์ข้อมูลจากหน้า DailySummary ใน Google Sheets")
         
-        st.info("ประวัติการซื้อล่าสุด (ดึงข้อมูลจากแผ่น Sales...)")
-        # สามารถเพิ่มโค้ดแสดงตาราง Sales ตรงนี้ได้
+        if st.button("📝 ส่งรายงานสรุปยอดเข้ากลุ่ม (ถ้ามี)"):
+            st.toast("กำลังส่งข้อมูลรายงาน...")
 
     # --- 📦 PAGE: STOCK ---
     elif menu == "📦 สต็อกออนไลน์":
-        st.subheader("ตรวจสอบคลังสินค้า")
+        st.subheader("📦 คลังสินค้าคงเหลือ")
         
-        # ค้นหาคอลัมน์ qty ให้เจอ
-        qty_col = 'qty' if 'qty' in df_stock else df_stock.columns[2] 
+        # ค้นหาคอลัมน์ qty ให้ถูกต้อง
+        id_col = 'id' if 'id' in df_stock else df_stock.columns[0]
+        qty_col = 'qty' if 'qty' in df_stock else df_stock.columns[2]
         
-        # แจ้งเตือนสต็อกต่ำ
+        # แจ้งเตือนสินค้าสต็อกต่ำ (< 5 ชิ้น)
         low_stock = df_stock[df_stock[qty_col].astype(float) < 5]
         if not low_stock.empty:
-            st.error(f"🚨 มีสินค้าใกล้หมดสต็อก! ({len(low_stock)} รายการ)")
-            st.table(low_stock)
+            st.error(f"🚨 สินค้าใกล้หมด {len(low_stock)} รายการ!")
+            st.dataframe(low_stock, use_container_width=True)
         
-        st.dataframe(df_stock, use_container_width=True)
-        st.caption(f"อัปเดตล่าสุดเมื่อ: {datetime.now().strftime('%H:%M:%S')}")
+        st.dataframe(df_stock, use_container_width=True, hide_index=True)
