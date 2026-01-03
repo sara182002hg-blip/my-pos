@@ -115,121 +115,85 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# 5. PAGE: POS SYSTEM (THE CORE)
+# 5. PAGE: POS SYSTEM
 # ==========================================
 if choice == "🛒 หน้าขายสินค้า":
-    df_p = POSDataEngine.fetch("products")
-    df_s = POSDataEngine.fetch("stock")
-    
-    # Create Stock Dictionary for Speed
-    stock_map = {}
-    if not df_s.empty:
-        stock_map = pd.Series(df_s.iloc[:, 1].values, index=df_s.iloc[:, 0].astype(str).str.strip()).to_dict()
+    df_p = POSDataEngine.fetch("products")
+    df_s = POSDataEngine.fetch("stock")
+    stock_map = {}
+    if not df_s.empty:
+        stock_map = pd.Series(df_s.iloc[:, 1].values, index=df_s.iloc[:, 0].astype(str).str.strip()).to_dict()
 
-    col_l, col_r = st.columns([2.3, 1.4])
+    col_l, col_r = st.columns([2.3, 1.4])
 
-    with col_l:
-        st.markdown("<h2 style='color:#D4AF37;'>📋 รายการเมนู</h2>", unsafe_allow_html=True)
-        if df_p.empty:
-            st.warning("กำลังโหลดข้อมูลสินค้า...")
-        else:
-            # Grid Layout
-            grid = st.columns(3)
-            for idx, row in df_p.iterrows():
-                p_name = str(row.iloc[0]).strip()
-                p_price = float(row.iloc[1])
-                p_img = str(row.iloc[2]) if len(row) > 2 else ""
-                current_stock = int(stock_map.get(p_name, 0))
-                
-                # Check how many already in cart
-                in_cart = st.session_state.cart.get(p_name, {}).get('qty', 0)
-                available = current_stock - in_cart
+    with col_l:
+        st.markdown("<h2 style='color:#D4AF37;'>📋 รายการเมนู</h2>", unsafe_allow_html=True)
+        if df_p.empty:
+            st.warning("กำลังโหลดข้อมูลสินค้า...")
+        else:
+            grid = st.columns(3)
+            for idx, row in df_p.iterrows():
+                p_name = str(row.iloc[0]).strip()
+                p_price = float(row.iloc[1])
+                p_img = str(row.iloc[2]) if len(row) > 2 else ""
+                current_stock = int(stock_map.get(p_name, 0))
+                in_cart = st.session_state.cart.get(p_name, {}).get('qty', 0)
+                available = current_stock - in_cart
 
-                with grid[idx % 3]:
-                    st.markdown(f"""
-                    <div class="product-box">
-                        <div class="img-container"><img src="{p_img if p_img else 'https://via.placeholder.com/200'}"></div>
-                        <div style="margin-top:10px; font-weight:600; height:30px;">{p_name}</div>
-                        <div class="price-tag">{p_price:,.0f} ฿</div>
-                        <div class="stock-label">คงเหลือ: {available} ชิ้น</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    if available > 0:
-                        if st.button(f"เลือก {p_name}", key=f"p_{idx}"):
-                            st.session_state.cart[p_name] = st.session_state.cart.get(p_name, {'price': p_price, 'qty': 0})
-                            st.session_state.cart[p_name]['qty'] += 1
-                            st.rerun()
-                    else:
-                        st.button("สินค้าหมด", key=f"out_{idx}", disabled=True)
+                with grid[idx % 3]:
+                    st.markdown(f"""
+                    <div class="product-box">
+                        <img src="{p_img if p_img else 'https://via.placeholder.com/200'}" style="width:100%; border-radius:12px; height:150px; object-fit:cover;">
+                        <div style="margin-top:10px; font-weight:600;">{p_name}</div>
+                        <div class="price-tag">{p_price:,.0f} ฿</div>
+                        <div style="font-size:12px; color:#888;">คงเหลือ: {available}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if available > 0:
+                        if st.button(f"เลือก {p_name}", key=f"p_{idx}"):
+                            st.session_state.cart[p_name] = st.session_state.cart.get(p_name, {'price': p_price, 'qty': 0})
+                            st.session_state.cart[p_name]['qty'] += 1
+                            st.rerun()
+                    else:
+                        st.button("หมด", key=f"out_{idx}", disabled=True)
 
-    with col_r:
-        if st.session_state.last_receipt:
-            # --- RECEIPT VIEW ---
-            res = st.session_state.last_receipt
-            qr_url = f"https://promptpay.io/{PROMPTPAY_ID}/{res['total']}.png"
-            
-            receipt_html = f"""
-            <div id="receipt-box" class="receipt-container">
-                <center>
-                    <h2 style="margin:0;">TAS PREMIUM SHOP</h2>
-                    <small>เลขที่บิล: {res['bill_id']}</small>
-                    <hr style="border-top: 1px dashed #000;">
-                </center>
-                <table style="width:100%; border-collapse: collapse;">
-                    {''.join([f'<tr><td style="padding:5px 0;">{k} x{v["qty"]}</td><td style="text-align:right;">{v["price"]*v["qty"]:,.0f}</td></tr>' for k,v in res['items'].items()])}
-                </table>
-                <hr style="border-top: 1px dashed #000;">
-                <div style="display:flex; justify-content:space-between; font-size:20px; font-weight:bold;">
-                    <span>ยอดรวมสุทธิ</span><span>{res['total']:,.0f} ฿</span>
-                </div>
-                <div style="margin-top:10px; font-size:14px;">
-                    ชำระโดย: {res['method']}<br>
-                    {f"รับเงินสด: {res['cash']:,.2f} ฿<br>เงินทอน: {res['change']:,.2f} ฿" if res['method'] == "เงินสด" else ""}
-                </div>
-                {f'<center><div style="margin:15px 0;"><img src="{qr_url}" width="180"></div><p style="font-size:12px;">สแกนเพื่อชำระเงิน (เบอร์: {PROMPTPAY_ID})</p></center>' if res['method'] == "พร้อมเพย์" else ""}
-                <hr style="border-top: 1px dashed #000;">
-                <center><small>{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}<br>*** ขอบคุณที่มาอุดหนุน ***</small></center>
-            </div>
-            """
-            st.markdown(receipt_html, unsafe_allow_html=True)
-            
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("🖨️ พิมพ์ใบเสร็จ"):
-                    st.components.v1.html(f"<script>var w=window.open('','','width=400,height=600');w.document.write(`<html><head><style>body{{margin:0;}}</style></head><body>{receipt_html}</body></html>`);w.document.close();setTimeout(function(){{w.print();w.close();}},500);</script>", height=0)
-            with c2:
-                if st.button("➕ เปิดบิลใหม่", type="primary"):
-                    st.session_state.last_receipt = None
-                    st.rerun()
-        else:
-            # --- CART VIEW ---
-            st.markdown("<h3 style='color:#D4AF37;'>🛒 ตะกร้าของฉัน</h3>", unsafe_allow_html=True)
-            if not st.session_state.cart:
-                st.info("ตะกร้าว่างเปล่า... กรุณาเลือกสินค้า")
-            else:
-                total_val = 0
-                for name, data in list(st.session_state.cart.items()):
-                    subtotal = data['price'] * data['qty']
-                    total_val += subtotal
-                    with st.container(border=True):
-                        c1, c2, c3 = st.columns([3, 1, 1])
-                        c1.markdown(f"**{name}**\n\n{data['price']:,.0f} x {data['qty']}")
-                        if c2.button("➕", key=f"plus_{name}"):
-                            st.session_state.cart[name]['qty'] += 1
-                            st.rerun()
-                        if c3.button("🗑️", key=f"rem_{name}"):
-                            del st.session_state.cart[name]
-                            st.rerun()
-                
-                st.markdown(f"<h1 style='text-align:right; color:#D4AF37;'>{total_val:,.0f} ฿</h1>", unsafe_allow_html=True)
-                
-                pay_method = st.radio("วิธีการชำระเงิน", ["เงินสด", "พร้อมเพย์"], horizontal=True)
-                
-                cash_received = 0.0
-                if pay_method == "เงินสด":
-                    cash_received = st.number_input("ยอดเงินที่รับ", min_value=float(total_val), step=20.0, format="%.2f")
-                    st.markdown(f"### เงินทอน: <span style='color:#00FF00;'>{cash_received - float(total_val):,.2f} ฿</span>", unsafe_allow_html=True)
+    with col_r:
+        if st.session_state.last_receipt:
+            res = st.session_state.last_receipt
+            qr_url = f"https://promptpay.io/{PROMPTPAY_ID}/{res['total']}.png"
+            st.markdown(f"""
+            <div class="receipt-container">
+                <center><h2>RECEIPT</h2><small>บิล: {res['bill_id']}</small></center>
+                <hr>
+                <table style="width:100%;">
+                    {''.join([f'<tr><td>{k} x{v["qty"]}</td><td style="text-align:right;">{v["price"]*v["qty"]:,.0f}</td></tr>' for k,v in res['items'].items()])}
+                </table>
+                <hr>
+                <div style="display:flex; justify-content:space-between; font-weight:bold;"><span>ยอดรวม</span><span>{res['total']:,.0f} ฿</span></div>
+                <center><img src="{qr_url}" width="150"></center>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("➕ เปิดบิลใหม่", type="primary"):
+                st.session_state.last_receipt = None
+                st.rerun()
+        else:
+            st.markdown("<h3 style='color:#D4AF37;'>🛒 ตะกร้า</h3>", unsafe_allow_html=True)
+            total_val = 0
+            for name, data in list(st.session_state.cart.items()):
+                total_val += data['price'] * data['qty']
+                with st.container(border=True):
+                    c1, c2, c3 = st.columns([3, 1, 1])
+                    c1.write(f"**{name}**\n{data['price']:,.0f} x {data['qty']}")
+                    if c2.button("➕", key=f"add_{name}"):
+                        st.session_state.cart[name]['qty'] += 1
+                        st.rerun()
+                    if c3.button("🗑️", key=f"del_{name}"):
+                        del st.session_state.cart[name]
+                        st.rerun()
+            
+            if total_val > 0:
+                st.markdown(f"## {total_val:,.0f} ฿")
+                pay_method = st.radio("ชำระเงิน", ["เงินสด", "พร้อมเพย์"], horizontal=True)
                 
                 if st.button("🚀 ยืนยันการขาย", type="primary"):
                     bill_id = f"POS{int(time.time())}"
@@ -253,7 +217,7 @@ if choice == "🛒 หน้าขายสินค้า":
                         st.rerun()
                     else:
                         st.error("บันทึกไม่สำเร็จ!")
-
+                        
 # ==========================================
 # 6. PAGE: ANALYTICS (DEEP INSIGHT)
 # ==========================================
@@ -331,3 +295,4 @@ elif choice == "📦 สต็อก & คลัง":
         st.dataframe(df_stock, use_container_width=True, height=500)
     else:
         st.error("ไม่สามารถเชื่อมต่อข้อมูลสต็อกได้")
+
