@@ -192,15 +192,65 @@ if choice == "🛒 หน้าขายสินค้า":
                         st.error("บันทึกไม่สำเร็จ!")
 
 # ==========================================
-# 6. PAGE: ANALYTICS
+# 6. PAGE: ANALYTICS (DEEP INSIGHT)
 # ==========================================
 elif choice == "📊 รายงานวิเคราะห์":
-    st.markdown("<h2 style='color:#D4AF37;'>📊 วิเคราะห์ยอดขาย</h2>", unsafe_allow_html=True)
-    df_sales = POSDataEngine.fetch("sales")
-    if not df_sales.empty:
-        st.dataframe(df_sales, use_container_width=True)
-    else:
-        st.info("ไม่พบข้อมูลการขาย")
+    st.markdown("<h2 style='color:#D4AF37;'>📊 วิเคราะห์ผลประกอบการ</h2>", unsafe_allow_html=True)
+    df_sales = POSDataEngine.fetch("sales")
+    df_sum = POSDataEngine.fetch("summary")
+    
+    if df_sales.empty:
+        st.info("ไม่พบข้อมูลการขายในขณะนี้")
+    else:
+        # Preprocessing Dates
+        df_sales.iloc[:, 0] = pd.to_datetime(df_sales.iloc[:, 0], dayfirst=True, errors='coerce')
+        val_col = df_sales.columns[2]
+        date_col = df_sales.columns[0]
+        
+        now = datetime.now()
+        today = now.date()
+        today_str = now.strftime("%d/%m/%Y")
+        
+        # Checking Daily Summary Status
+        is_closed = False
+        if not df_sum.empty:
+            is_closed = not df_sum[df_sum.iloc[:,0].astype(str).str.contains(today_str)].empty
+        
+        # Aggregations
+        today_val = df_sales[df_sales[date_col].dt.date == today][val_col].sum()
+        week_val = df_sales[df_sales[date_col] >= (now - timedelta(days=7))][val_col].sum()
+        month_val = df_sales[df_sales[date_col].dt.month == now.month][val_col].sum()
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("ยอดขายวันนี้", f"{0 if is_closed else today_val:,.2f} ฿", delta="CLOSED" if is_closed else "ACTIVE")
+        m2.metric("ยอดรวม 7 วัน", f"{week_val:,.2f} ฿")
+        m3.metric("ยอดรวมเดือนนี้", f"{month_val:,.2f} ฿")
+        
+        st.divider()
+        
+        tab1, tab2 = st.tabs(["📉 ประวัติรายการขาย", "📝 บันทึกสรุปยอดปิดวัน"])
+        
+        with tab1:
+            st.dataframe(df_sales.sort_values(by=date_col, ascending=False), use_container_width=True)
+            
+        with tab2:
+            if is_closed:
+                st.success(f"✅ วันนี้ ({today_str}) สรุปยอดปิดวันเรียบร้อยแล้ว")
+            else:
+                st.warning("⚠️ โปรดตรวจสอบข้อมูลก่อนกด 'ปิดยอดวัน' ยอดวันนี้จะถูกย้ายเข้าสู่ DailySummary และรีเซ็ตหน้าจอ")
+                if st.button("Confirm: บันทึกปิดยอดวันนี้"):
+                    with st.spinner("Saving summary..."):
+                        ok = POSDataEngine.post_to_gsheet({
+                            "action": "save_summary",
+                            "date": today_str,
+                            "total": float(today_val),
+                            "bills": len(df_sales[df_sales[date_col].dt.date == today])
+                        })
+                        if ok:
+                            st.success("บันทึกสำเร็จ!")
+                            st.cache_data.clear()
+                            time.sleep(1)
+                            st.rerun()
 
 # ==========================================
 # 7. PAGE: STOCK MANAGEMENT
@@ -212,3 +262,4 @@ elif choice == "📦 สต็อก & คลัง":
         st.dataframe(df_stock, use_container_width=True)
     else:
         st.error("โหลดข้อมูลสต็อกไม่ได้")
+
