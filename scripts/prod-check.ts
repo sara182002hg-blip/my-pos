@@ -191,6 +191,12 @@ async function main() {
         ? "configured"
         : "placeholder or missing — KDS kitchen actions and real-time WebSocket will be rejected",
       severity: "warning"
+    },
+    {
+      name: "staff-mobile-api-url",
+      ok: isHttpsUrl(env.EXPO_PUBLIC_API_BASE_URL) && isConfigured(env.EXPO_PUBLIC_API_BASE_URL),
+      detail: env.EXPO_PUBLIC_API_BASE_URL || "missing — staff mobile app will fall back to hardcoded LAN IP",
+      severity: "warning"
     }
   ];
 
