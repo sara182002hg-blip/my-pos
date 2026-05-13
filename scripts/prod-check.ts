@@ -177,6 +177,20 @@ async function main() {
         areConfigured([env.RD_CLIENT_ID, env.RD_CLIENT_SECRET]),
       detail: env.ETAX_PROVIDER || "missing",
       severity: "warning"
+    },
+    {
+      name: "cors-origin",
+      ok: isConfigured(env.CORS_ORIGIN),
+      detail: env.CORS_ORIGIN || "missing — API will reject cross-origin requests in production",
+      severity: "blocker"
+    },
+    {
+      name: "kds-api-key",
+      ok: isConfigured(env.KDS_API_KEY),
+      detail: isConfigured(env.KDS_API_KEY)
+        ? "configured"
+        : "placeholder or missing — KDS kitchen actions and real-time WebSocket will be rejected",
+      severity: "warning"
     }
   ];
 
