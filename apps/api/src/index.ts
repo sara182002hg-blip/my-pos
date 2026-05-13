@@ -102,9 +102,16 @@ await registerSecurityRoutes(app);
 await registerStaffRoutes(app);
 
 app.get("/ws/live", { websocket: true }, (socket, request) => {
-  const query = request.query as { token?: string };
-  const token = query.token ?? request.headers.authorization?.slice("Bearer ".length).trim();
+  const query = request.query as { token?: string; kds_key?: string };
 
+  // KDS terminals authenticate with a static API key instead of a JWT
+  const expectedKdsKey = process.env.KDS_API_KEY;
+  if (expectedKdsKey && query.kds_key === expectedKdsKey) {
+    registerLiveSocket(socket);
+    return;
+  }
+
+  const token = query.token ?? request.headers.authorization?.slice("Bearer ".length).trim();
   if (!token || !verifyAccessToken(token)) {
     socket.close(4401, "Unauthorized");
     return;
