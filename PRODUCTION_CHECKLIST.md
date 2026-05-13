@@ -112,17 +112,25 @@ cp .env.production.example .env
 # 2. Run prod:check — must show 0 blockers
 npx tsx scripts/prod-check.ts
 
-# 3. Run DB migrations
-npx prisma migrate deploy
+# 3. Create and commit DB migrations (run ONCE on dev machine with DB running)
+#    Skip if prisma/migrations/ already has files
+npm run db:migrate:dev -- --name init
+git add prisma/migrations && git commit -m "chore: add initial prisma migration"
 
-# 4. Start API
+# 4. Apply migrations to production DB
+npm run db:migrate:deploy
+
+# 5. (Optional) Seed reference data
+npm run db:seed
+
+# 6. Start API  (Docker: migrations run automatically in CMD)
 npm run start -w apps/api
 
-# 5. Build and deploy frontends
+# 7. Build and deploy frontends
 npm run build -w apps/pos-console
 npm run build -w apps/customer-qr
 npm run build -w apps/kds
 
-# 6. Build Staff Mobile EAS build
+# 8. Build Staff Mobile EAS build
 cd apps/staff-mobile && eas build --platform all
 ```

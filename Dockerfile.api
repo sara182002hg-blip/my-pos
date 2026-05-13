@@ -12,4 +12,4 @@ RUN npm run db:generate
 
 EXPOSE 4000
 
-CMD ["npm", "run", "start", "--workspace", "@mypos/api"]
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run start --workspace @mypos/api"]
