@@ -89,6 +89,7 @@ export interface MutableAppState extends AppSnapshot {
   securityPolicy: SecurityPolicy;
   deliveryOrders: import("@mypos/domain").DeliveryOrder[];
   deliveryPlatforms: import("@mypos/domain").DeliveryPlatformConnection[];
+  pushTokens: { userId: string; token: string; platform: string; registeredAt: string }[];
 }
 
 export interface AppRepository {
@@ -290,6 +291,7 @@ export interface AppRepository {
     attempt: ReceiptDispatchAttempt,
     actor: ActionActor
   ): ReceiptDispatchAttempt;
+  registerPushToken(userId: string, token: string, platform: string): void;
 }
 
 export interface AppPersistenceAdapter {

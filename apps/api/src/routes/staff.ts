@@ -265,4 +265,15 @@ export const registerStaffRoutes = async (app: FastifyInstance) => {
 
     return response;
   });
+
+  app.post<{ Body: { token: string; platform: string } }>("/api/staff/push-token", async (request, reply) => {
+    const session = requirePermission(request, reply, "orders.manage");
+
+    if (!session) {
+      return { message: "Forbidden" };
+    }
+
+    appRepository.registerPushToken(session.user.id, request.body.token, request.body.platform);
+    return reply.status(200).send({ ok: true });
+  });
 };

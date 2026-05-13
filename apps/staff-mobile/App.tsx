@@ -42,6 +42,20 @@ import {
 // ─── Config ────────────────────────────────────────────────────────────────────
 
 const API = (process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://192.168.100.9:4000").replace(/\/$/, "");
+
+let _expoPushToken: string | null = null;
+
+const getOrCreateDeviceId = async (): Promise<string> => {
+  try {
+    const stored = await AsyncStorage.getItem("device:id");
+    if (stored) return stored;
+    const id = `mob-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    await AsyncStorage.setItem("device:id", id);
+    return id;
+  } catch {
+    return "STAFF-MOBILE-FALLBACK";
+  }
+};
 const STORE_KEYS = {
   menu: "cache:menu",
   tables: "cache:tables",
@@ -167,6 +181,14 @@ export default function App() {
     (async () => {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== "granted") return;
+      try {
+        const tokenData = await Notifications.getExpoPushTokenAsync({
+          projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID
+        });
+        _expoPushToken = tokenData.data;
+      } catch {
+        // Expo Go without projectId or simulator — push token unavailable
+      }
       sub = Notifications.addNotificationReceivedListener((notif) => {
         const title = notif.request.content.title ?? "แจ้งเตือนใหม่";
         const body = notif.request.content.body ?? "";
@@ -199,16 +221,24 @@ export default function App() {
   const loginAsStaff = async () => {
     try {
       setBusyAction("login");
+      const deviceId = await getOrCreateDeviceId();
       const res = await fetch(`${API}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: "staff01", pin: "2468", deviceId: "STAFF-MOBILE-DEMO" })
+        body: JSON.stringify({ username: "staff01", pin: "2468", deviceId })
       });
       if (!res.ok) throw new Error("Login failed");
       const data = (await res.json()) as LoginResponse;
       if (!data.session) throw new Error("2FA roles cannot login via mobile");
       setSession(data.session);
       setMessage(`เข้าสู่ระบบในชื่อ ${data.session.user.displayName}`);
+      if (_expoPushToken) {
+        void fetch(`${API}/api/staff/push-token`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${data.session.accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ token: _expoPushToken, platform: Platform.OS })
+        }).catch(() => {});
+      }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -304,11 +334,11 @@ export default function App() {
     try {
       setBusyAction("clock-in");
       setMessage("กำลังอ่าน GPS…");
-      const loc = await getGPSLocation();
+      const [loc, deviceId] = await Promise.all([getGPSLocation(), getOrCreateDeviceId()]);
       const res = await fetch(`${API}/api/staff/clock-in`, {
         method: "POST",
         headers: authHeaders,
-        body: JSON.stringify({ ...loc, deviceId: "STAFF-MOBILE-DEMO", ipAddress: "10.0.0.5" })
+        body: JSON.stringify({ ...loc, deviceId })
       });
       if (!res.ok) {
         const err = (await res.json()) as { message?: string };

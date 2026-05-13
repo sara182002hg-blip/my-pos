@@ -134,7 +134,8 @@ const createInitialState = (): MutableAppState => ({
   swapRequests: clone(swapShiftRequests),
   securityPolicy: clone(securityPolicy),
   deliveryOrders: clone(deliveryOrders),
-  deliveryPlatforms: clone(deliveryPlatforms)
+  deliveryPlatforms: clone(deliveryPlatforms),
+  pushTokens: []
 });
 
 export class MemoryAppRepository implements AppRepository {
@@ -2201,6 +2202,15 @@ export class MemoryAppRepository implements AppRepository {
   recordReceiptDispatchAttempt(attempt: ReceiptDispatchAttempt, actor: ActionActor) {
     this.appendReceiptDispatchAttempt(attempt, actor);
     return clone(attempt);
+  }
+
+  registerPushToken(userId: string, token: string, platform: string) {
+    // In-memory: tokens not persisted across restarts.
+    // Production: persist to DB and use Expo Push API for targeted delivery.
+    const existing = this.state.pushTokens.findIndex((t) => t.userId === userId && t.platform === platform);
+    const entry = { userId, token, platform, registeredAt: new Date().toISOString() };
+    if (existing >= 0) this.state.pushTokens[existing] = entry;
+    else this.state.pushTokens.push(entry);
   }
 
   private closeOrderAsPaid(order: MutableAppState["orders"][number]) {
