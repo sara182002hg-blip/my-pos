@@ -29,6 +29,7 @@ import {
   type InventoryOverviewResponse,
   type IssueTaxInvoiceRequest,
   type LoginResponse,
+  type RefreshSessionResponse,
   type ManagedUserAccount,
   type ManagedUserFeedResponse,
   type MemberFeedResponse,
@@ -540,6 +541,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     load().catch(() => undefined);
   }, [authHeaders, operationState, receiptFeedVersion]);
+
+  useEffect(() => {
+    if (!session) return;
+    const msUntilExpiry = new Date(session.expiresAt).getTime() - Date.now();
+    const refreshAt = Math.max(msUntilExpiry - 60_000, 0);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`${apiBaseUrl}/api/auth/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken: session.refreshToken })
+        });
+        if (!res.ok) throw new Error("Refresh failed");
+        const data = (await res.json()) as RefreshSessionResponse;
+        setSession(data.session);
+        setPermissions(data.permissions);
+      } catch {
+        setSession(null);
+        setPermissions([]);
+        setMfaChallenge(null);
+        setOperationState("Session expired — please login again");
+      }
+    }, refreshAt);
+    return () => clearTimeout(timer);
+  }, [session]);
 
   useEffect(() => {
     if (!selectedTable) return;

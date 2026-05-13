@@ -25,6 +25,7 @@ import {
   type DiningTable,
   type LeaveRequest,
   type LoginResponse,
+  type RefreshSessionResponse,
   type MenuItemSummary,
   type OrderTicket,
   type RequestManagerHelpRequest,
@@ -317,6 +318,30 @@ export default function App() {
   useEffect(() => {
     void loadStaffData();
   }, [loadStaffData]);
+
+  useEffect(() => {
+    if (!session) return;
+    const msUntilExpiry = new Date(session.expiresAt).getTime() - Date.now();
+    const refreshAt = Math.max(msUntilExpiry - 60_000, 0);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API}/api/auth/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken: session.refreshToken })
+        });
+        if (!res.ok) throw new Error("Refresh failed");
+        const data = (await res.json()) as RefreshSessionResponse;
+        setSession(data.session);
+        setMessage(`Session ต่ออายุแล้ว · หมดอายุ ${new Date(data.session.expiresAt).toLocaleTimeString("th-TH")}`);
+      } catch {
+        setSession(null);
+        setShift(null);
+        setMessage("Session หมดอายุ — กรุณา login ใหม่");
+      }
+    }, refreshAt);
+    return () => clearTimeout(timer);
+  }, [session]);
 
   // ─── GPS ──────────────────────────────────────────────────────────────────────
 
