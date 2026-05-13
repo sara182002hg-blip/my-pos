@@ -1,7 +1,13 @@
-import type { AppPermission } from "@mypos/domain";
+import type { AppPermission, UserRole } from "@mypos/domain";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { appRepository } from "../data/app-state";
 import { verifyAccessToken, type VerifiedSession } from "./auth";
+
+export interface KitchenActor {
+  id: string;
+  displayName: string;
+  role: UserRole;
+}
 
 const getBearerToken = (authorization?: string) => {
   if (!authorization?.startsWith("Bearer ")) {
@@ -62,4 +68,24 @@ export const requirePermission = (
   }
 
   return session;
+};
+
+// Accepts either a valid JWT (orders.manage) or a static KDS_API_KEY header.
+// Used for kitchen action routes so KDS terminals don't need a login session.
+export const requireKdsOrPermission = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  permission: AppPermission
+): { id: string; displayName: string; role: UserRole } | null => {
+  const expectedKey = process.env.KDS_API_KEY;
+  const sentKey = request.headers["x-kds-key"];
+
+  if (expectedKey && sentKey === expectedKey) {
+    return { id: "kds-terminal", displayName: "KDS Terminal", role: "KITCHEN" };
+  }
+
+  const session = requirePermission(request, reply, permission);
+  return session
+    ? { id: session.user.id, displayName: session.user.displayName, role: session.user.role }
+    : null;
 };

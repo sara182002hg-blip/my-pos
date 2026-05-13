@@ -10,3 +10,10 @@ export const toWsUrl = (baseUrl: string) => {
   url.pathname = "/ws/live";
   return url.toString();
 };
+
+const kdsToken = (import.meta.env.VITE_KDS_TOKEN as string | undefined) ?? "";
+
+export const kdsHeaders: Record<string, string> = {
+  "Content-Type": "application/json",
+  ...(kdsToken ? { "x-kds-key": kdsToken } : {})
+};

@@ -19,7 +19,7 @@ import { dispatchReceiptPrint, dispatchReceiptShare } from "../lib/receipt-dispa
 import { submitEtaxDocument } from "../lib/etax-submission";
 import { parsePaymentWebhookPayload, validatePaymentWebhookSecret } from "../lib/payment-gateway";
 import { broadcastSnapshot } from "../lib/realtime";
-import { requirePermission } from "../lib/guards";
+import { requirePermission, requireKdsOrPermission } from "../lib/guards";
 
 export const registerOperationRoutes = async (app: FastifyInstance) => {
   const buildActor = (session: NonNullable<ReturnType<typeof requirePermission>>) => ({
@@ -861,17 +861,13 @@ export const registerOperationRoutes = async (app: FastifyInstance) => {
   });
 
   app.post<{ Params: { ticketId: string } }>("/api/kitchen/:ticketId/ready", async (request, reply) => {
-    const session = requirePermission(request, reply, "orders.manage");
+    const actor = requireKdsOrPermission(request, reply, "orders.manage");
 
-    if (!session) {
+    if (!actor) {
       return { message: "Forbidden" };
     }
 
-    const ticket = appRepository.markKitchenReady(request.params.ticketId, {
-      id: session.user.id,
-      displayName: session.user.displayName,
-      role: session.user.role
-    });
+    const ticket = appRepository.markKitchenReady(request.params.ticketId, actor);
 
     if (!ticket) {
       reply.status(404);
@@ -883,17 +879,13 @@ export const registerOperationRoutes = async (app: FastifyInstance) => {
   });
 
   app.post<{ Params: { ticketId: string } }>("/api/kitchen/:ticketId/acknowledge", async (request, reply) => {
-    const session = requirePermission(request, reply, "orders.manage");
+    const actor = requireKdsOrPermission(request, reply, "orders.manage");
 
-    if (!session) {
+    if (!actor) {
       return { message: "Forbidden" };
     }
 
-    const ticket = appRepository.acknowledgeKitchenTicket(request.params.ticketId, {
-      id: session.user.id,
-      displayName: session.user.displayName,
-      role: session.user.role
-    });
+    const ticket = appRepository.acknowledgeKitchenTicket(request.params.ticketId, actor);
 
     if (!ticket) {
       reply.status(404);
@@ -905,17 +897,13 @@ export const registerOperationRoutes = async (app: FastifyInstance) => {
   });
 
   app.post<{ Params: { ticketId: string } }>("/api/kitchen/:ticketId/out-of-stock", async (request, reply) => {
-    const session = requirePermission(request, reply, "orders.manage");
+    const actor = requireKdsOrPermission(request, reply, "orders.manage");
 
-    if (!session) {
+    if (!actor) {
       return { message: "Forbidden" };
     }
 
-    const ticket = appRepository.markKitchenOutOfStock(request.params.ticketId, {
-      id: session.user.id,
-      displayName: session.user.displayName,
-      role: session.user.role
-    });
+    const ticket = appRepository.markKitchenOutOfStock(request.params.ticketId, actor);
 
     if (!ticket) {
       reply.status(404);

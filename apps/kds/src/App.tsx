@@ -5,7 +5,7 @@ import {
   type LiveEvent,
   type PlatformOverview
 } from "@mypos/domain";
-import { apiBaseUrl, toWsUrl } from "./api";
+import { apiBaseUrl, kdsHeaders, toWsUrl } from "./api";
 
 const badgeMap: Record<string, string> = {
   RED: "state-red",
@@ -121,7 +121,7 @@ export default function App() {
       setBusyCardId(cardId);
       const res = await fetch(`${apiBaseUrl}/api/kitchen/${cardId}/${action}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: kdsHeaders,
         body: "{}"
       });
       if (!res.ok) throw new Error("Request failed");
