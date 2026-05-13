@@ -11,7 +11,7 @@ import type {
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:4000";
 const languageOptions: SupportedLanguage[] = ["th", "en", "zh", "ja"];
-const CART_KEY = "mypos_qr_cart";
+const cartKey = (tableId: string) => `mypos_qr_cart_${tableId}`;
 
 const uiCopy: Record<
   SupportedLanguage,
@@ -218,21 +218,21 @@ export default function QrOrderClient({ initialTableId }: QrOrderClientProps) {
   /* ── localStorage cart persistence ────────────────────── */
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(CART_KEY);
+      const saved = localStorage.getItem(cartKey(initialTableId));
       if (saved) setCart(JSON.parse(saved) as CartLine[]);
     } catch {
       /* ignore */
     }
     setLanguage(detectLang());
-  }, []);
+  }, [initialTableId]);
 
   useEffect(() => {
     try {
-      localStorage.setItem(CART_KEY, JSON.stringify(cart));
+      localStorage.setItem(cartKey(initialTableId), JSON.stringify(cart));
     } catch {
       /* ignore */
     }
-  }, [cart]);
+  }, [cart, initialTableId]);
 
   const loadTable = async () => {
     try {
@@ -351,7 +351,7 @@ export default function QrOrderClient({ initialTableId }: QrOrderClientProps) {
       });
       if (!response.ok) throw new Error("Could not place order");
       setCart([]);
-      localStorage.removeItem(CART_KEY);
+      localStorage.removeItem(cartKey(initialTableId));
       setMessage("Order sent to kitchen");
       await loadTable();
     } catch {
