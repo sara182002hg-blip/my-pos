@@ -64,6 +64,18 @@ import {
 } from "@mypos/domain";
 import { apiBaseUrl, toWsUrl } from "../api";
 
+const getOrCreateDeviceId = (): string => {
+  try {
+    const stored = localStorage.getItem("pos:device_id");
+    if (stored) return stored;
+    const id = `pos-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    localStorage.setItem("pos:device_id", id);
+    return id;
+  } catch {
+    return "POS-CONSOLE-FALLBACK";
+  }
+};
+
 // ── Shared constants ─────────────────────────────────────────────────────────
 
 export const modules = [
@@ -449,17 +461,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [fallbackOverview]);
 
   useEffect(() => {
-    const socket = new WebSocket(toWsUrl(apiBaseUrl));
+    const token = session?.accessToken;
+    const socket = new WebSocket(toWsUrl(apiBaseUrl, token));
     socket.onopen = () => setConnectionState("Live websocket connected");
     socket.onmessage = (msg) => {
       const event = JSON.parse(msg.data) as LiveEvent;
       if (event.type === "snapshot") setOverview(event.payload);
       if (event.type === "heartbeat") setLastHeartbeat(event.payload.now);
     };
-    socket.onclose = () => setConnectionState("Websocket disconnected");
+    socket.onclose = () => setConnectionState(token ? "Websocket disconnected" : "Websocket unavailable — login for live updates");
     socket.onerror = () => setConnectionState("Websocket unavailable");
     return () => { socket.close(); };
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     if (!authHeaders) return;
@@ -552,14 +565,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setBusyAction(`login:${username}`);
       const res = await fetch(`${apiBaseUrl}/api/auth/login`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, pin, deviceId: "POS-CONSOLE-DEMO" })
+        body: JSON.stringify({ username, pin, deviceId: getOrCreateDeviceId() })
       });
       if (!res.ok) throw new Error("Login failed");
       const data = (await res.json()) as LoginResponse;
       if (data.challenge) {
         setMfaChallenge(data.challenge);
-        setMfaCode(data.challenge.demoCode);
-        setOperationState(`2FA required for ${username}. Use demo code ${data.challenge.demoCode}`);
+        setOperationState(`2FA required for ${username}. Demo code: ${data.challenge.demoCode}`);
         return;
       }
       if (!data.session || !data.permissions) throw new Error("Login failed");
