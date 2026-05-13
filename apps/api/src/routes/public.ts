@@ -39,6 +39,15 @@ export const registerPublicRoutes = async (app: FastifyInstance) => {
 
   app.post<{ Params: { tableId: string }; Body: PublicOrderRequest }>(
     "/api/public/tables/:tableId/orders",
+    {
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: "1 minute",
+          errorResponseBuilder: () => ({ message: "Too many orders. Please wait before placing another." })
+        }
+      }
+    },
     async (request, reply) => {
       const order = appRepository.createPublicOrder(request.params.tableId, request.body);
 
