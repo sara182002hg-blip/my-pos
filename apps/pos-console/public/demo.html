@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MyPOS Demo Launcher</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #101214;
+        --panel: #191d20;
+        --panel-soft: #20262a;
+        --line: #343c42;
+        --text: #f4f1e8;
+        --muted: #aeb7ba;
+        --accent: #7bd88f;
+        --accent-2: #f2c15d;
+        --danger: #ff7c7c;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          linear-gradient(120deg, rgba(123, 216, 143, 0.08), transparent 36%),
+          linear-gradient(180deg, #131719 0%, var(--bg) 58%, #0c0e10 100%);
+        color: var(--text);
+        font-family:
+          "Segoe UI",
+          "Noto Sans Thai",
+          sans-serif;
+      }
+
+      main {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 32px 0 48px;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        align-items: flex-start;
+        margin-bottom: 24px;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 22px;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: clamp(28px, 4vw, 48px);
+        line-height: 1.05;
+      }
+
+      h2 {
+        font-size: 18px;
+      }
+
+      .sub {
+        color: var(--muted);
+        margin-top: 8px;
+        max-width: 720px;
+      }
+
+      .status-pill {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        border-radius: 8px;
+        padding: 10px 12px;
+        min-width: 180px;
+        color: var(--muted);
+      }
+
+      .status-pill strong {
+        display: block;
+        color: var(--text);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 14px;
+      }
+
+      .panel {
+        background: color-mix(in srgb, var(--panel) 94%, black);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+      }
+
+      .span-7 {
+        grid-column: span 7;
+      }
+
+      .span-5 {
+        grid-column: span 5;
+      }
+
+      .span-4 {
+        grid-column: span 4;
+      }
+
+      .span-12 {
+        grid-column: span 12;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      button,
+      a.button {
+        appearance: none;
+        border: 1px solid var(--line);
+        background: var(--panel-soft);
+        color: var(--text);
+        border-radius: 7px;
+        padding: 10px 12px;
+        font: inherit;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      button.primary,
+      a.primary {
+        background: #254b32;
+        border-color: #3a7650;
+      }
+
+      button.warn {
+        background: #4b3820;
+        border-color: #795d32;
+      }
+
+      button:disabled {
+        opacity: 0.55;
+        cursor: wait;
+      }
+
+      .service-list,
+      .steps,
+      .creds {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .service,
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent-2);
+      }
+
+      .dot.ok {
+        background: var(--accent);
+      }
+
+      .dot.bad {
+        background: var(--danger);
+      }
+
+      code {
+        color: var(--accent-2);
+      }
+
+      .log {
+        min-height: 110px;
+        max-height: 260px;
+        overflow: auto;
+        white-space: pre-wrap;
+        line-height: 1.45;
+        color: var(--muted);
+        background: #0b0d0f;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 12px;
+        margin-top: 14px;
+      }
+
+      @media (max-width: 860px) {
+        header {
+          display: block;
+        }
+
+        .status-pill {
+          margin-top: 16px;
+        }
+
+        .span-7,
+        .span-5,
+        .span-4 {
+          grid-column: span 12;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>MyPOS Demo</h1>
+          <p class="sub">หน้าเดียวสำหรับทดลองระบบร้าน: เปิด POS, KDS, QR, เช็ก server, สร้างออเดอร์ตัวอย่าง และรีเซ็ตข้อมูล demo</p>
+        </div>
+        <div class="status-pill">
+          <strong id="overallStatus">กำลังเช็กระบบ</strong>
+          <span id="overallDetail">รอสักครู่</span>
+        </div>
+      </header>
+
+      <section class="grid">
+        <article class="panel span-7">
+          <h2>เปิดแอพทดลอง</h2>
+          <div class="actions">
+            <a class="button primary" href="http://127.0.0.1:5173" target="_blank">เปิด POS</a>
+            <a class="button" href="http://127.0.0.1:5174" target="_blank">เปิด KDS</a>
+            <a class="button" href="http://127.0.0.1:3000/table/T2" target="_blank">เปิด QR โต๊ะ T2</a>
+            <a class="button" href="http://127.0.0.1:4000/health" target="_blank">API health</a>
+          </div>
+          <div class="steps">
+            <div class="row"><span>1. Login POS</span><code>cashier01 / 1234</code></div>
+            <div class="row"><span>2. Manager mode</span><code>manager01 / 5678</code></div>
+            <div class="row"><span>3. Reset demo</span><code>owner01 / 9999</code></div>
+          </div>
+        </article>
+
+        <article class="panel span-5">
+          <h2>สถานะบริการ</h2>
+          <div class="service-list" id="services"></div>
+          <div class="actions">
+            <button class="primary" id="checkHealth">เช็กอีกครั้ง</button>
+          </div>
+        </article>
+
+        <article class="panel span-4">
+          <h2>คำสั่ง demo</h2>
+          <div class="actions">
+            <button class="primary" id="createOrder">สร้างออเดอร์ตัวอย่าง</button>
+            <button class="warn" id="resetDemo">รีเซ็ต demo</button>
+          </div>
+          <p class="sub" style="margin-top: 12px">คำสั่งจะยิงเข้าระบบ API จริงในโหมด UAT</p>
+        </article>
+
+        <article class="panel span-4">
+          <h2>บัญชีทดลอง</h2>
+          <div class="creds">
+            <div class="row"><span>Cashier</span><code>cashier01 / 1234</code></div>
+            <div class="row"><span>Manager</span><code>manager01 / 5678</code></div>
+            <div class="row"><span>Owner</span><code>owner01 / 9999</code></div>
+            <div class="row"><span>Staff</span><code>staff01 / 2468</code></div>
+          </div>
+        </article>
+
+        <article class="panel span-4">
+          <h2>เส้นทางทดสอบเร็ว</h2>
+          <div class="steps">
+            <div class="row"><span>POS</span><span>สร้างออเดอร์และจ่ายเงิน</span></div>
+            <div class="row"><span>KDS</span><span>รับออเดอร์แล้วกด Ready</span></div>
+            <div class="row"><span>QR</span><span>สั่งอาหารจากโต๊ะ T2</span></div>
+          </div>
+        </article>
+
+        <article class="panel span-12">
+          <h2>ผลลัพธ์</h2>
+          <div class="log" id="log">พร้อมใช้งาน</div>
+        </article>
+      </section>
+    </main>
+
+    <script>
+      const apiBase = "http://127.0.0.1:4000";
+      const services = [
+        ["api", "API", "http://127.0.0.1:4000/health"],
+        ["pos", "POS Console", "http://127.0.0.1:5173"],
+        ["kds", "Kitchen Display", "http://127.0.0.1:5174"],
+        ["qr", "QR Web App", "http://127.0.0.1:3000/table/T2"]
+      ];
+
+      const logBox = document.getElementById("log");
+      const servicesBox = document.getElementById("services");
+      const overallStatus = document.getElementById("overallStatus");
+      const overallDetail = document.getElementById("overallDetail");
+
+      function log(message) {
+        const stamp = new Date().toLocaleTimeString("th-TH");
+        logBox.textContent = `[${stamp}] ${message}\n${logBox.textContent}`;
+      }
+
+      async function request(path, options = {}) {
+        const response = await fetch(`${apiBase}${path}`, {
+          headers: {
+            "content-type": "application/json",
+            ...(options.headers || {})
+          },
+          ...options
+        });
+
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : {};
+
+        if (!response.ok) {
+          throw new Error(data.message || text || response.statusText);
+        }
+
+        return data;
+      }
+
+      async function login(username, pin) {
+        const result = await request("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ username, pin })
+        });
+
+        if (result.session) {
+          return result.session.accessToken;
+        }
+
+        const verified = await request("/api/auth/verify-2fa", {
+          method: "POST",
+          body: JSON.stringify({
+            challengeId: result.challenge.challengeId,
+            code: result.challenge.demoCode
+          })
+        });
+
+        return verified.session.accessToken;
+      }
+
+      async function checkHealth() {
+        servicesBox.innerHTML = "";
+        const results = await Promise.all(
+          services.map(async ([key, label, url]) => {
+            try {
+              const response = await fetch(url);
+              return { key, label, ok: response.ok, status: response.status };
+            } catch (error) {
+              return { key, label, ok: false, status: 0 };
+            }
+          })
+        );
+
+        for (const result of results) {
+          const item = document.createElement("div");
+          item.className = "service";
+          item.innerHTML = `<span>${result.label}</span><span><i class="dot ${result.ok ? "ok" : "bad"}"></i> ${result.status || "offline"}</span>`;
+          servicesBox.appendChild(item);
+        }
+
+        const ok = results.every((result) => result.ok);
+        overallStatus.textContent = ok ? "ระบบพร้อมเทส" : "มีบริการยังไม่พร้อม";
+        overallDetail.textContent = ok ? "เปิดแอพได้เลย" : "ลองรัน npm run uat:start";
+        log(ok ? "Health check ผ่านครบ" : "Health check ยังไม่ครบ");
+      }
+
+      async function createDemoOrder() {
+        const button = document.getElementById("createOrder");
+        button.disabled = true;
+        try {
+          const token = await login("cashier01", "1234");
+          const [tables, menu] = await Promise.all([
+            request("/api/tables"),
+            request("/api/menu")
+          ]);
+          const table = tables.find((item) => item.status === "AVAILABLE") || tables[0];
+          const menuItem = menu.find((item) => item.inStock) || menu[0];
+          const result = await request("/api/orders", {
+            method: "POST",
+            headers: { authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              tableId: table.id,
+              guestCount: 2,
+              waiterName: "Demo Launcher",
+              priority: "NORMAL",
+              source: "POS",
+              items: [{ menuItemId: menuItem.id, quantity: 1 }]
+            })
+          });
+          log(`สร้างออเดอร์แล้ว: ${result.order.id} / ${result.order.tableLabel}`);
+        } catch (error) {
+          log(`สร้างออเดอร์ไม่สำเร็จ: ${error.message}`);
+        } finally {
+          button.disabled = false;
+        }
+      }
+
+      async function resetDemo() {
+        const button = document.getElementById("resetDemo");
+        button.disabled = true;
+        try {
+          const token = await login("owner01", "9999");
+          await request("/api/system/reset-demo", {
+            method: "POST",
+            headers: { authorization: `Bearer ${token}` }
+          });
+          log("รีเซ็ต demo สำเร็จ");
+          await checkHealth();
+        } catch (error) {
+          log(`รีเซ็ตไม่สำเร็จ: ${error.message}`);
+        } finally {
+          button.disabled = false;
+        }
+      }
+
+      document.getElementById("checkHealth").addEventListener("click", checkHealth);
+      document.getElementById("createOrder").addEventListener("click", createDemoOrder);
+      document.getElementById("resetDemo").addEventListener("click", resetDemo);
+      checkHealth();
+    </script>
+  </body>
+</html>

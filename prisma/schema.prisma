@@ -1,0 +1,597 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Branch {
+  id            String          @id @default(cuid())
+  name          String
+  code          String          @unique
+  timezone      String          @default("Asia/Bangkok")
+  floorplanJson Json?
+  securityConfig SecurityConfig?
+  users         AppUser[]
+  tables        DiningTable[]
+  categories    MenuCategory[]
+  menuItems     MenuItem[]
+  orders        Order[]
+  reservations  Reservation[]
+  shifts        ShiftSession[]
+  customers     CustomerMember[]
+  inventoryItems InventoryItem[]
+  inventoryMovements InventoryMovement[]
+  shiftPlans    ShiftPlan[]
+  leaveRequests LeaveRequest[]
+  swapRequests  SwapShiftRequest[]
+  deliveryPlatformConfigs DeliveryPlatformConnection[]
+  deliveryOrders DeliveryOrder[]
+  paymentGatewaySessions PaymentGatewaySession[]
+  exceptionRecords ExceptionRecord[]
+  receiptDispatchAttempts ReceiptDispatchAttempt[]
+  staffNotifications StaffNotificationRecord[]
+  kitchenChats  KitchenChatRecord[]
+  auditLogs     AuditLog[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+model AppUser {
+  id             String      @id @default(cuid())
+  branchId       String
+  username       String      @unique
+  displayName    String
+  role           UserRole
+  pinHash        String
+  accountExpires DateTime?
+  isActive       Boolean     @default(true)
+  blockedAt      DateTime?
+  forceLogoutAfter DateTime?
+  lastLoginAt    DateTime?
+  branch         Branch      @relation(fields: [branchId], references: [id])
+  shiftPlans     ShiftPlan[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+}
+
+model DiningTable {
+  id            String       @id @default(cuid())
+  branchId      String
+  label         String
+  zone          String
+  seats         Int
+  status        TableStatus  @default(AVAILABLE)
+  qrToken       String?
+  qrLockedAt    DateTime?
+  branch        Branch       @relation(fields: [branchId], references: [id])
+  orders        Order[]
+  reservations  Reservation[]
+}
+
+model MenuCategory {
+  id        String     @id @default(cuid())
+  branchId  String
+  name      String
+  sortOrder Int        @default(0)
+  branch    Branch     @relation(fields: [branchId], references: [id])
+  menuItems MenuItem[]
+}
+
+model MenuItem {
+  id               String           @id @default(cuid())
+  branchId         String
+  categoryId       String
+  name             String
+  sku              String?
+  description      String?
+  basePrice        Decimal          @db.Decimal(10, 2)
+  deliveryPrice    Decimal?         @db.Decimal(10, 2)
+  happyHourPrice   Decimal?         @db.Decimal(10, 2)
+  imageUrl         String?
+  station          KitchenStation
+  isActive         Boolean          @default(true)
+  isLowStock       Boolean          @default(false)
+  allergenInfo     String[]
+  translationsJson Json?
+  branch           Branch           @relation(fields: [branchId], references: [id])
+  category         MenuCategory     @relation(fields: [categoryId], references: [id])
+  modifierGroups   ModifierGroup[]
+  orderItems       OrderItem[]
+}
+
+model ModifierGroup {
+  id         String           @id @default(cuid())
+  menuItemId String
+  name       String
+  minSelect  Int              @default(0)
+  maxSelect  Int              @default(1)
+  menuItem   MenuItem         @relation(fields: [menuItemId], references: [id])
+  options    ModifierOption[]
+}
+
+model ModifierOption {
+  id              String         @id @default(cuid())
+  modifierGroupId String
+  name            String
+  extraPrice      Decimal        @db.Decimal(10, 2)
+  modifierGroup   ModifierGroup  @relation(fields: [modifierGroupId], references: [id])
+}
+
+model Order {
+  id                String             @id @default(cuid())
+  branchId          String
+  tableId           String?
+  memberId          String?
+  orderNo           String             @unique
+  source            OrderSource
+  status            OrderStatus        @default(DRAFT)
+  priority          OrderPriority      @default(NORMAL)
+  guestCount        Int
+  subtotalAmount    Decimal            @db.Decimal(10, 2)
+  discountAmount    Decimal            @db.Decimal(10, 2)
+  vatAmount         Decimal            @db.Decimal(10, 2)
+  totalAmount       Decimal            @db.Decimal(10, 2)
+  specialNote       String?
+  openedByUserId    String?
+  closedByUserId    String?
+  memberSettledAt   DateTime?
+  branch            Branch             @relation(fields: [branchId], references: [id])
+  table             DiningTable?       @relation(fields: [tableId], references: [id])
+  member            CustomerMember?    @relation(fields: [memberId], references: [id])
+  items             OrderItem[]
+  payments          Payment[]
+  paymentGatewaySessions PaymentGatewaySession[]
+  receipts          Receipt[]
+  kitchenTickets    KitchenTicket[]
+  deliveryOrder     DeliveryOrder?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model CustomerMember {
+  id                String      @id @default(cuid())
+  branchId          String
+  fullName          String
+  phone             String
+  tier              String
+  pointsBalance     Int         @default(0)
+  totalSpend        Decimal     @db.Decimal(10, 2)
+  lastVisitAt       DateTime?
+  favoriteItems     String[]
+  preferredLanguage String?
+  birthDate         DateTime?
+  lineUserId        String?
+  branch            Branch      @relation(fields: [branchId], references: [id])
+  orders            Order[]
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+model OrderItem {
+  id             String            @id @default(cuid())
+  orderId        String
+  menuItemId     String
+  quantity       Int
+  unitPrice      Decimal           @db.Decimal(10, 2)
+  note           String?
+  station        KitchenStation
+  lineStatus     KitchenLineStatus @default(PENDING)
+  allergens      String[]
+  modifiersJson  Json
+  order          Order             @relation(fields: [orderId], references: [id])
+  menuItem       MenuItem          @relation(fields: [menuItemId], references: [id])
+}
+
+model KitchenTicket {
+  id            String            @id @default(cuid())
+  orderId       String
+  station       KitchenStation
+  status        KitchenLineStatus @default(PENDING)
+  delayReason   String?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  order         Order             @relation(fields: [orderId], references: [id])
+}
+
+model Payment {
+  id              String         @id @default(cuid())
+  orderId         String
+  method          PaymentMethod
+  amount          Decimal        @db.Decimal(10, 2)
+  tipAmount       Decimal        @db.Decimal(10, 2) @default(0)
+  referenceNo     String?
+  splitGroup      String?
+  paidAt          DateTime       @default(now())
+  order           Order          @relation(fields: [orderId], references: [id])
+}
+
+model PaymentGatewaySession {
+  id            String   @id
+  branchId      String
+  orderId       String
+  tableLabel    String
+  method        PaymentMethod
+  provider      String
+  amount        Decimal  @db.Decimal(10, 2)
+  tipAmount     Decimal  @db.Decimal(10, 2) @default(0)
+  status        String
+  reference     String   @unique
+  qrPayload     String?
+  checkoutUrl   String?
+  failureReason String?
+  createdAt     DateTime
+  expiresAt     DateTime
+  capturedAt    DateTime?
+  branch        Branch   @relation(fields: [branchId], references: [id])
+  order         Order    @relation(fields: [orderId], references: [id])
+}
+
+model Receipt {
+  id              String      @id @default(cuid())
+  orderId         String
+  receiptNo       String      @unique
+  receiptType     ReceiptType
+  qrLookupToken   String      @unique
+  splitGroupId    String?
+  splitIndex      Int?
+  splitCount      Int?
+  guestLabel      String?
+  email           String?
+  lineUserId      String?
+  emailSharedAt   DateTime?
+  lineSharedAt    DateTime?
+  printedAt       DateTime?
+  printerName     String?
+  taxPayerName    String?
+  taxId           String?
+  taxBranchAddress String?
+  taxEmail        String?
+  taxIssuedAt     DateTime?
+  eTaxStatus      String?
+  eTaxSubmissionReference String?
+  eTaxSubmittedAt DateTime?
+  eTaxError       String?
+  voidedAt        DateTime?
+  voidReason      String?
+  refundedAt      DateTime?
+  refundedAmount  Decimal?    @db.Decimal(10, 2)
+  refundReason    String?
+  order           Order       @relation(fields: [orderId], references: [id])
+}
+
+model ReceiptDispatchAttempt {
+  id          String   @id @default(cuid())
+  branchId    String
+  receiptId   String
+  receiptNo   String
+  channel     String
+  target      String
+  status      String
+  provider    String
+  message     String?
+  createdAt   DateTime @default(now())
+  branch      Branch   @relation(fields: [branchId], references: [id])
+}
+
+model Reservation {
+  id            String      @id @default(cuid())
+  branchId      String
+  tableId       String?
+  customerName  String
+  customerPhone String
+  partySize     Int
+  reservedAt    DateTime
+  status        ReservationStatus @default(CONFIRMED)
+  branch        Branch      @relation(fields: [branchId], references: [id])
+  table         DiningTable? @relation(fields: [tableId], references: [id])
+}
+
+model InventoryItem {
+  id               String      @id @default(cuid())
+  branchId         String
+  name             String
+  category         String
+  unit             String
+  onHand           Decimal     @db.Decimal(12, 3)
+  minLevel         Decimal     @db.Decimal(12, 3)
+  reorderQty       Decimal     @db.Decimal(12, 3)
+  avgUnitCost      Decimal     @db.Decimal(10, 2)
+  supplierName     String?
+  linkedMenuItemIds String[]
+  recipeUsageJson  Json?
+  branch           Branch      @relation(fields: [branchId], references: [id])
+  movements        InventoryMovement[]
+  updatedAt        DateTime    @updatedAt
+  createdAt        DateTime    @default(now())
+}
+
+model InventoryMovement {
+  id          String        @id @default(cuid())
+  branchId    String
+  itemId      String
+  itemName    String
+  type        String
+  quantity    Decimal       @db.Decimal(12, 3)
+  unit        String
+  note        String?
+  actorName   String
+  createdAt   DateTime      @default(now())
+  branch      Branch        @relation(fields: [branchId], references: [id])
+  item        InventoryItem @relation(fields: [itemId], references: [id])
+}
+
+model ShiftSession {
+  id              String         @id @default(cuid())
+  branchId        String
+  userId          String
+  startedAt       DateTime
+  endedAt         DateTime?
+  roleLabel       String?
+  checkInLat      Decimal        @db.Decimal(9, 6)
+  checkInLng      Decimal        @db.Decimal(9, 6)
+  checkOutLat     Decimal?       @db.Decimal(9, 6)
+  checkOutLng     Decimal?       @db.Decimal(9, 6)
+  geofenceStatus  GeofenceStatus
+  distanceMeters  Int            @default(0)
+  tipAmount       Decimal        @db.Decimal(10, 2) @default(0)
+  ordersHandled   Int            @default(0)
+  deviceId        String
+  ipAddress       String
+  otMinutes       Int            @default(0)
+  branch          Branch         @relation(fields: [branchId], references: [id])
+}
+
+model StaffNotificationRecord {
+  id             String    @id @default(cuid())
+  branchId       String
+  type           String
+  title          String
+  message        String
+  audienceRole   String
+  audienceUserId String?
+  tableLabel     String?
+  isRead         Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  branch         Branch    @relation(fields: [branchId], references: [id])
+}
+
+model KitchenChatRecord {
+  id         String    @id @default(cuid())
+  branchId   String
+  fromName   String
+  fromRole   String
+  target     String
+  tableLabel String?
+  message    String
+  createdAt  DateTime  @default(now())
+  branch     Branch    @relation(fields: [branchId], references: [id])
+}
+
+model ShiftPlan {
+  id             String     @id @default(cuid())
+  branchId       String
+  userId         String
+  staffName      String
+  role           String
+  shiftDate      DateTime
+  startTime      String
+  endTime        String
+  zone           String
+  status         String
+  assignedByName String?
+  note           String?
+  branch         Branch     @relation(fields: [branchId], references: [id])
+  user           AppUser    @relation(fields: [userId], references: [id])
+  swapRequests   SwapShiftRequest[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+model LeaveRequest {
+  id               String     @id @default(cuid())
+  branchId         String
+  userId           String
+  staffName        String
+  leaveDate        DateTime
+  leaveType        String
+  reason           String
+  status           String
+  requestedAt      DateTime
+  reviewerName     String?
+  reviewedAt       DateTime?
+  coverStaffUserId String?
+  coverStaffName   String?
+  branch           Branch     @relation(fields: [branchId], references: [id])
+}
+
+model SwapShiftRequest {
+  id              String     @id @default(cuid())
+  branchId        String
+  shiftPlanId     String
+  requesterUserId String
+  requesterName   String
+  targetUserId    String?
+  targetStaffName String?
+  shiftDate       DateTime
+  reason          String
+  status          String
+  requestedAt     DateTime
+  reviewerName    String?
+  reviewedAt      DateTime?
+  branch          Branch     @relation(fields: [branchId], references: [id])
+  shiftPlan       ShiftPlan  @relation(fields: [shiftPlanId], references: [id])
+}
+
+model SecurityConfig {
+  id               String    @id @default(cuid())
+  branchId         String    @unique
+  adminIpWhitelist String[]
+  twoFactorRoles   String[]
+  receiptTemplateJson Json?
+  branch           Branch    @relation(fields: [branchId], references: [id])
+  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime  @default(now())
+}
+
+model DeliveryPlatformConnection {
+  id             String           @id @default(cuid())
+  branchId       String
+  platform       DeliveryPlatform
+  displayName    String
+  enabled        Boolean          @default(true)
+  acceptsOrders  Boolean          @default(true)
+  menuSyncState  String
+  lastSyncAt     DateTime?
+  commissionRate Decimal          @db.Decimal(6, 4)
+  branch         Branch           @relation(fields: [branchId], references: [id])
+
+  @@unique([branchId, platform])
+}
+
+model DeliveryOrder {
+  branchId         String
+  id              String              @id @default(cuid())
+  orderId         String              @unique
+  platform        DeliveryPlatform
+  externalOrderId String
+  customerName    String
+  branchStatus    String
+  placedAt        DateTime            @default(now())
+  totalAmount     Decimal             @db.Decimal(10, 2)
+  deliveryStatus  DeliveryStatus
+  commission      Decimal             @db.Decimal(10, 2)
+  riderEtaMinutes Int?
+  branch          Branch              @relation(fields: [branchId], references: [id])
+  order           Order               @relation(fields: [orderId], references: [id])
+}
+
+model ExceptionRecord {
+  id         String    @id @default(cuid())
+  branchId   String
+  kind       String
+  orderId    String
+  receiptId  String?
+  reason     String
+  amount     Decimal?  @db.Decimal(10, 2)
+  actorName  String
+  actorRole  String
+  createdAt  DateTime  @default(now())
+  branch     Branch    @relation(fields: [branchId], references: [id])
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  branchId    String
+  actorId     String?
+  actorRole   String
+  action      String
+  entityType  String
+  entityId    String
+  ipAddress   String?
+  metadata    Json
+  createdAt   DateTime  @default(now())
+  branch      Branch    @relation(fields: [branchId], references: [id])
+}
+
+enum TableStatus {
+  AVAILABLE
+  SEATED
+  PENDING_PAYMENT
+  CLEANING
+  RESERVED
+  LOCKED_BY_QR
+}
+
+enum OrderStatus {
+  DRAFT
+  SENT_TO_KITCHEN
+  IN_PROGRESS
+  READY
+  SERVED
+  PAID
+  VOIDED
+}
+
+enum OrderSource {
+  POS
+  QR
+  DELIVERY
+  STAFF_APP
+}
+
+enum OrderPriority {
+  NORMAL
+  VIP
+  URGENT
+}
+
+enum KitchenStation {
+  HOT
+  COLD
+  BAR
+  DESSERT
+}
+
+enum KitchenLineStatus {
+  PENDING
+  ACKNOWLEDGED
+  IN_PROGRESS
+  READY
+  OUT_OF_STOCK
+}
+
+enum PaymentMethod {
+  CASH
+  PROMPTPAY
+  CARD
+  RABBIT_LINE_PAY
+  TRUE_MONEY
+}
+
+enum ReceiptType {
+  STANDARD
+  TAX_INVOICE
+  E_TAX
+}
+
+enum ReservationStatus {
+  CONFIRMED
+  CHECKED_IN
+  CANCELLED
+  NO_SHOW
+}
+
+enum DeliveryPlatform {
+  GRAB
+  LINE_MAN
+  FOODPANDA
+  ROBINHOOD
+  SHOPEE_FOOD
+  LALAMOVE
+}
+
+enum DeliveryStatus {
+  RECEIVED
+  ACCEPTED
+  PREPARING
+  READY_FOR_PICKUP
+  PICKED_UP
+  DELIVERED
+  CANCELLED
+}
+
+enum GeofenceStatus {
+  IN_RANGE
+  OUT_OF_RANGE
+}
+
+enum UserRole {
+  OWNER
+  MANAGER
+  CASHIER
+  STAFF
+  KITCHEN
+}

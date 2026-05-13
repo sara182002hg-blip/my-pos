@@ -1,0 +1,312 @@
+:root {
+  font-family: "Segoe UI", "Noto Sans Thai", sans-serif;
+  color: #f6f7fb;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(62, 175, 255, 0.16), transparent 25%),
+    radial-gradient(circle at 80% 0%, rgba(255, 102, 102, 0.18), transparent 22%),
+    linear-gradient(180deg, #090b11 0%, #111726 60%, #090a0f 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+button {
+  cursor: pointer;
+  font: inherit;
+}
+
+.kds-page {
+  padding: 1.5rem;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #7dc5ff;
+  font-size: 0.75rem;
+}
+
+/* ── Header ──────────────────────────────────────────────── */
+
+.kds-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.kds-alerts {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.tag-crit {
+  color: #ff6b6b;
+  font-weight: 700;
+}
+
+.btn-fs {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  color: #cde;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.btn-fs:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ── Summary ─────────────────────────────────────────────── */
+
+.kds-summary {
+  display: flex;
+  gap: 1rem;
+  margin: 1rem 0 1.2rem;
+}
+
+.kds-summary > div {
+  flex: 1;
+  padding: 1rem 1.2rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 20px;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.kds-summary > div.sum-warn {
+  border-color: rgba(255, 211, 94, 0.45);
+  background: rgba(255, 211, 94, 0.07);
+}
+
+.kds-summary > div.sum-crit {
+  border-color: rgba(255, 100, 100, 0.55);
+  background: rgba(255, 70, 70, 0.1);
+}
+
+/* ── Station tabs ────────────────────────────────────────── */
+
+.station-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.2rem;
+  flex-wrap: wrap;
+}
+
+.station-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #cde;
+  font-size: 0.9rem;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.station-tab:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.station-tab.is-active {
+  background: rgba(125, 197, 255, 0.18);
+  border-color: rgba(125, 197, 255, 0.5);
+  color: #a3ddff;
+  font-weight: 600;
+}
+
+.tab-badge {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+/* ── Board grid ──────────────────────────────────────────── */
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.empty-queue {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 3rem;
+  opacity: 0.45;
+  font-size: 1.1rem;
+}
+
+/* ── Queue card ──────────────────────────────────────────── */
+
+.queue-card {
+  display: flex;
+  flex-direction: column;
+  padding: 1.2rem;
+  min-height: 320px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 24px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  transition: border-color 0.3s;
+}
+
+.queue-card.sla-warning {
+  border-color: rgba(255, 211, 94, 0.55);
+  box-shadow: 0 0 0 1px rgba(255, 211, 94, 0.2), 0 18px 50px rgba(0, 0, 0, 0.35);
+}
+
+.queue-card.sla-overdue {
+  border-color: rgba(255, 100, 100, 0.65);
+  box-shadow: 0 0 0 2px rgba(255, 80, 80, 0.25), 0 18px 50px rgba(0, 0, 0, 0.35);
+  animation: pulse-border 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(255, 80, 80, 0.25), 0 18px 50px rgba(0, 0, 0, 0.35); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 80, 80, 0.45), 0 18px 50px rgba(0, 0, 0, 0.35); }
+}
+
+/* Color state borders */
+.state-red    { border-color: rgba(255, 110, 110, 0.55); }
+.state-yellow { border-color: rgba(255, 211, 94, 0.55); }
+.state-blue   { border-color: rgba(75, 162, 255, 0.65); }
+.state-purple { border-color: rgba(212, 109, 255, 0.65); }
+.state-green  { border-color: rgba(61, 224, 151, 0.65); }
+
+/* ── Card internals ──────────────────────────────────────── */
+
+.queue-top,
+.table-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.queue-top h2 {
+  margin: 0.2rem 0 0;
+  font-size: 2rem;
+}
+
+.chip-group {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.chip-group span {
+  border-radius: 999px;
+  padding: 0.4rem 0.75rem;
+  background: rgba(255, 255, 255, 0.09);
+  text-align: center;
+  font-size: 0.82rem;
+}
+
+.chip-urgent {
+  background: rgba(255, 100, 100, 0.25) !important;
+  color: #ffaaaa;
+  font-weight: 700;
+}
+
+.chip-warn {
+  background: rgba(255, 211, 94, 0.2) !important;
+  color: #ffd95e;
+  font-weight: 700;
+}
+
+/* ── SLA progress bar ────────────────────────────────────── */
+
+.sla-track {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  margin: 0.75rem 0;
+  overflow: hidden;
+}
+
+.sla-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: rgba(61, 224, 151, 0.7);
+  transition: width 1s linear, background 0.3s;
+}
+
+.sla-fill-warn {
+  background: rgba(255, 211, 94, 0.8);
+}
+
+.sla-fill-crit {
+  background: rgba(255, 90, 90, 0.9);
+}
+
+/* ── Items list ──────────────────────────────────────────── */
+
+.queue-card ul {
+  padding-left: 1rem;
+  line-height: 1.7;
+  flex: 1;
+  margin: 0.5rem 0;
+}
+
+/* ── Actions ─────────────────────────────────────────────── */
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 0.8rem;
+}
+
+.actions button {
+  flex: 1;
+  min-width: 90px;
+  min-height: 52px;
+  border-radius: 16px;
+  border: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #081018;
+  background: #a3ddff;
+  transition: opacity 0.15s;
+}
+
+.actions button:disabled {
+  opacity: 0.45;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+
+@media (max-width: 1200px) {
+  .board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .board {
+    grid-template-columns: 1fr;
+  }
+
+  .kds-header,
+  .kds-summary {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .kds-alerts {
+    justify-content: flex-start;
+  }
+}

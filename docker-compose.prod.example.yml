@@ -1,0 +1,61 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    env_file:
+      - .env.production
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+
+  pos:
+    build:
+      context: .
+      dockerfile: Dockerfile.pos
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+
+  kds:
+    build:
+      context: .
+      dockerfile: Dockerfile.kds
+    ports:
+      - "5174:80"
+    restart: unless-stopped
+
+  qr:
+    build:
+      context: .
+      dockerfile: Dockerfile.qr
+    env_file:
+      - .env.production
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mypos
+      POSTGRES_USER: mypos
+      POSTGRES_PASSWORD: replace-with-production-password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+
+volumes:
+  postgres-data:
+  redis-data:

@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "MyPOS Staff",
+    "slug": "mypos-staff",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": ["**/*"],
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "MyPOS Staff ต้องการ GPS เพื่อยืนยัน geofence ก่อนเริ่มกะงาน"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#7ad2ff",
+          "sounds": []
+        }
+      ]
+    ],
+    "ios": {
+      "bundleIdentifier": "com.mypos.staff",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "MyPOS Staff ต้องการ GPS เพื่อยืนยัน geofence ก่อนเริ่มกะงาน"
+      }
+    },
+    "android": {
+      "package": "com.mypos.staff",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    }
+  }
+}

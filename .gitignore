@@ -1,0 +1,15 @@
+node_modules
+dist
+.turbo
+.expo
+.vite
+.env
+.env.local
+coverage
+*.log
+*.tsbuildinfo
+.local
+backups
+.next
+.claude
+scripts/oracleJdk-26/

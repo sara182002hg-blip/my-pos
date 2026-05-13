@@ -1,0 +1,49 @@
+{
+  "name": "mypos-platform",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "prod:compose:config": "docker compose -f docker-compose.prod.example.yml config",
+    "env:init": "tsx scripts/init-env.ts",
+    "doctor": "tsx scripts/doctor.ts",
+    "pilot:links": "tsx scripts/pilot-links.ts",
+    "prod:check": "tsx scripts/prod-check.ts",
+    "prod:check:example": "tsx scripts/prod-check.ts --env .env.production.example",
+    "prod:data:check": "tsx scripts/prod-data-check.ts",
+    "prod:data:check:example": "tsx scripts/prod-data-check.ts --env .env.production.example",
+    "release:check": "tsx scripts/release-check.ts",
+    "uat:start": "powershell -ExecutionPolicy Bypass -File scripts/uat-start.ps1",
+    "uat:stop": "powershell -ExecutionPolicy Bypass -File scripts/uat-stop.ps1",
+    "uat:health": "tsx scripts/uat-health.ts",
+    "dev:api": "npm run dev --workspace @mypos/api",
+    "dev:pos": "npm run dev --workspace @mypos/pos-console",
+    "dev:kds": "npm run dev --workspace @mypos/kds",
+    "dev:staff": "npm run dev --workspace @mypos/staff-mobile",
+    "dev:qr": "npm run dev --workspace @mypos/customer-qr",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:backup": "tsx scripts/db-backup.ts",
+    "db:restore": "tsx scripts/db-restore.ts",
+    "smoke:all": "tsx scripts/smoke-all.ts",
+    "smoke:pilot": "tsx scripts/smoke-pilot.ts",
+    "smoke:reset-demo": "tsx scripts/smoke-reset-demo.ts",
+    "smoke:db": "tsx scripts/smoke-db.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.0",
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "prisma": "^6.16.0",
+    "tsx": "^4.20.6"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "MyPOS QR Ordering",
+  "short_name": "MyPOS QR",
+  "description": "Scan, order, and request bill from your table.",
+  "start_url": "/table/T2",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#09131c",
+  "theme_color": "#09131c",
+  "categories": ["food", "business", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
