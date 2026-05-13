@@ -41,7 +41,7 @@ import {
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 
-const API = "http://192.168.100.9:4000";
+const API = (process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://192.168.100.9:4000").replace(/\/$/, "");
 const STORE_KEYS = {
   menu: "cache:menu",
   tables: "cache:tables",
