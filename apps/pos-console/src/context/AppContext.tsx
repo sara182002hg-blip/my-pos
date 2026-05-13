@@ -462,16 +462,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const token = session?.accessToken;
-    const socket = new WebSocket(toWsUrl(apiBaseUrl, token));
-    socket.onopen = () => setConnectionState("Live websocket connected");
-    socket.onmessage = (msg) => {
-      const event = JSON.parse(msg.data) as LiveEvent;
-      if (event.type === "snapshot") setOverview(event.payload);
-      if (event.type === "heartbeat") setLastHeartbeat(event.payload.now);
+    let socket: WebSocket;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectDelay = 1_000;
+    let destroyed = false;
+
+    const connect = () => {
+      if (destroyed) return;
+      socket = new WebSocket(toWsUrl(apiBaseUrl, token));
+      socket.onopen = () => {
+        setConnectionState("Live websocket connected");
+        reconnectDelay = 1_000;
+      };
+      socket.onerror = () => setConnectionState("Websocket error — reconnecting");
+      socket.onclose = () => {
+        if (destroyed) return;
+        if (token) {
+          setConnectionState(`Websocket disconnected — reconnecting in ${reconnectDelay / 1000}s`);
+          reconnectTimer = setTimeout(connect, reconnectDelay);
+          reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
+        } else {
+          setConnectionState("Websocket unavailable — login for live updates");
+        }
+      };
+      socket.onmessage = (msg) => {
+        const event = JSON.parse(msg.data) as LiveEvent;
+        if (event.type === "snapshot") setOverview(event.payload);
+        if (event.type === "heartbeat") setLastHeartbeat(event.payload.now);
+      };
     };
-    socket.onclose = () => setConnectionState(token ? "Websocket disconnected" : "Websocket unavailable — login for live updates");
-    socket.onerror = () => setConnectionState("Websocket unavailable");
-    return () => { socket.close(); };
+
+    connect();
+    return () => {
+      destroyed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      socket?.close();
+    };
   }, [session]);
 
   useEffect(() => {
