@@ -35,8 +35,20 @@ model Branch {
   staffNotifications StaffNotificationRecord[]
   kitchenChats  KitchenChatRecord[]
   auditLogs     AuditLog[]
+  storeSettings StoreSetting[]
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
+}
+
+model StoreSetting {
+  id        String   @id @default(cuid())
+  branchId  String
+  key       String
+  value     String
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  updatedAt DateTime @updatedAt
+
+  @@unique([branchId, key])
 }
 
 model AppUser {

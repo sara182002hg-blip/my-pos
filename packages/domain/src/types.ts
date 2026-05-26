@@ -334,6 +334,48 @@ export interface ReceiptTemplateSettings {
   showTipLine: boolean;
 }
 
+// ── Store Settings (กรอกผ่าน UI แทน .env) ────────────────────────────────────
+
+export interface StoreSettings {
+  // ข้อมูลร้าน
+  storeName: string;
+  storeAddress: string;
+  storeTaxId: string;
+  storePhone: string;
+  // PromptPay
+  promptpayMerchantId: string;
+  promptpayPhone: string;
+  // LINE OA
+  lineChannelAccessToken: string; // masked เป็น *** เมื่อตั้งค่าแล้ว
+  // SMTP
+  smtpHost: string;
+  smtpPort: string;
+  smtpUser: string;
+  smtpPass: string; // masked
+  smtpFrom: string;
+  // Card gateway
+  cardProvider: "OMISE_REAL" | "2C2P_REAL" | "OMISE_STUB" | "TWOC2P_STUB" | "";
+  omisePublicKey: string;
+  omiseSecretKey: string; // masked
+  twoc2pMerchantId: string;
+  twoc2pSecretKey: string; // masked
+  paymentWebhookSecret: string; // masked
+  // เครื่องพิมพ์
+  printerTcpMap: string; // "main=192.168.1.50:9100,kitchen=192.168.1.51:9100"
+  printerMode: "TEXT" | "ESCPOS";
+  // ใบเสร็จ
+  receiptBusinessName: string;
+  receiptBranchLabel: string;
+  receiptFooterMessage: string;
+  receiptContactLine: string;
+}
+
+export type UpdateStoreSettingsRequest = Partial<StoreSettings>;
+
+export interface StoreSettingsResponse {
+  settings: StoreSettings;
+}
+
 export interface ReceiptDispatchAttempt {
   id: string;
   receiptId: string;

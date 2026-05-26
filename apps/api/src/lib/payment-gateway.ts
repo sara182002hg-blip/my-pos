@@ -6,18 +6,31 @@ import type {
   PaymentSessionStatus,
   PaymentSessionSummary
 } from "@mypos/domain";
+import { settingsStore } from "./settings-store";
+
+// branchId is injected via context when available; fall back to well-known demo id
+let _activeBranchId = "BR-TH-001";
+export const setActiveBranchId = (id: string) => { _activeBranchId = id; };
+
+const getSetting = (key: Parameters<typeof settingsStore.getRaw>[1]) =>
+  settingsStore.getRaw(_activeBranchId, key);
 
 const getProviderForMethod = (
   method: CreatePaymentSessionRequest["method"]
 ): PaymentGatewayProvider => {
   if (method === "PROMPTPAY") {
+    const v = getSetting("cardProvider"); // PromptPay always REAL when merchant configured
+    const merchantId = getSetting("promptpayMerchantId");
+    if (merchantId) return "PROMPTPAY_REAL";
     return ((process.env.PAYMENT_PROMPTPAY_PROVIDER ?? "PROMPTPAY_STUB").trim().toUpperCase() ||
       "PROMPTPAY_STUB") as PaymentGatewayProvider;
   }
 
   if (method === "CARD") {
-    return ((process.env.PAYMENT_CARD_PROVIDER ?? "OMISE_STUB").trim().toUpperCase() ||
-      "OMISE_STUB") as PaymentGatewayProvider;
+    const provider = getSetting("cardProvider") ||
+      process.env.PAYMENT_CARD_PROVIDER?.trim().toUpperCase() ||
+      "OMISE_STUB";
+    return (provider || "OMISE_STUB") as PaymentGatewayProvider;
   }
 
   if (method === "RABBIT_LINE_PAY") {
@@ -30,13 +43,11 @@ const getProviderForMethod = (
 const buildReference = (orderId: string, method: CreatePaymentSessionRequest["method"]) =>
   `${method}-${orderId}-${Date.now()}`;
 
-const requireEnv = (name: string) => {
-  const value = process.env[name]?.trim();
-
+const requireSetting = (key: Parameters<typeof settingsStore.getRaw>[1], label: string) => {
+  const value = getSetting(key) || process.env[label]?.trim();
   if (!value || value.includes("replace-with")) {
-    throw new Error(`${name} is required for the selected payment provider`);
+    throw new Error(`${label} is required — กรุณาตั้งค่าใน Settings ของแอพ`);
   }
-
   return value;
 };
 
@@ -45,22 +56,20 @@ const assertProviderConfig = (
   method: CreatePaymentSessionRequest["method"]
 ) => {
   if (provider === "PROMPTPAY_REAL") {
-    requireEnv("PROMPTPAY_MERCHANT_ID");
-    requireEnv("PROMPTPAY_MERCHANT_PHONE");
+    requireSetting("promptpayMerchantId", "PROMPTPAY_MERCHANT_ID");
+    requireSetting("promptpayPhone", "PROMPTPAY_MERCHANT_PHONE");
     return;
   }
 
   if (provider === "OMISE_REAL") {
-    requireEnv("OMISE_PUBLIC_KEY");
-    requireEnv("OMISE_SECRET_KEY");
-    requireEnv("PAYMENT_CHECKOUT_BASE_URL");
+    requireSetting("omisePublicKey", "OMISE_PUBLIC_KEY");
+    requireSetting("omiseSecretKey", "OMISE_SECRET_KEY");
     return;
   }
 
   if (provider === "2C2P_REAL") {
-    requireEnv("TWOC2P_MERCHANT_ID");
-    requireEnv("TWOC2P_SECRET_KEY");
-    requireEnv("PAYMENT_CHECKOUT_BASE_URL");
+    requireSetting("twoc2pMerchantId", "TWOC2P_MERCHANT_ID");
+    requireSetting("twoc2pSecretKey", "TWOC2P_SECRET_KEY");
     return;
   }
 
@@ -90,7 +99,7 @@ const normalizeWebhookEvent = (event: string): PaymentSessionStatus | null => {
 const toSafeBuffer = (value: string) => Buffer.from(value, "utf8");
 
 export const validatePaymentWebhookSecret = (providedSecret?: string | string[]) => {
-  const expectedSecret = process.env.PAYMENT_WEBHOOK_SECRET?.trim();
+  const expectedSecret = getSetting("paymentWebhookSecret") || process.env.PAYMENT_WEBHOOK_SECRET?.trim();
   const providedValue = Array.isArray(providedSecret) ? providedSecret[0] : providedSecret;
   const candidate = providedValue?.trim();
 
@@ -159,8 +168,8 @@ export const createGatewayPaymentSession = (
 
   if (payload.method === "PROMPTPAY") {
     const merchantPhone = provider === "PROMPTPAY_REAL"
-      ? requireEnv("PROMPTPAY_MERCHANT_PHONE")
-      : process.env.PROMPTPAY_MERCHANT_PHONE?.trim() || "0812345678";
+      ? requireSetting("promptpayPhone", "PROMPTPAY_MERCHANT_PHONE")
+      : getSetting("promptpayPhone") || process.env.PROMPTPAY_MERCHANT_PHONE?.trim() || "0812345678";
     return {
       ...baseSession,
       qrPayload: `PROMPTPAY|${merchantPhone}|${payload.amount.toFixed(2)}|${reference}`

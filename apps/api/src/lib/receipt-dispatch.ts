@@ -6,6 +6,14 @@ import type {
 } from "@mypos/domain";
 import net from "node:net";
 import nodemailer from "nodemailer";
+import { settingsStore } from "./settings-store";
+
+// uses the same active branch as payment-gateway; services share one branch context per process
+let _activeBranchId = "BR-TH-001";
+export const setReceiptDispatchBranchId = (id: string) => { _activeBranchId = id; };
+
+const getSetting = (key: Parameters<typeof settingsStore.getRaw>[1]) =>
+  settingsStore.getRaw(_activeBranchId, key);
 
 type DispatchSuccess = {
   ok: true;
@@ -207,11 +215,11 @@ const sendEmailViaSmtp = async (
   recipient: string,
   template?: ReceiptTemplateSettings
 ): Promise<ReceiptDispatchOutcome> => {
-  const host = process.env.SMTP_HOST?.trim();
-  const port = Number(process.env.SMTP_PORT ?? "587");
-  const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASS ?? "";
-  const from = process.env.SMTP_FROM?.trim();
+  const host = getSetting("smtpHost") || process.env.SMTP_HOST?.trim();
+  const port = Number(getSetting("smtpPort") || process.env.SMTP_PORT || "587");
+  const user = getSetting("smtpUser") || process.env.SMTP_USER?.trim();
+  const pass = getSetting("smtpPass") || process.env.SMTP_PASS || "";
+  const from = getSetting("smtpFrom") || process.env.SMTP_FROM?.trim();
   const secure = isTruthy(process.env.SMTP_SECURE);
   const provider = "SMTP";
   const activeTemplate = resolveReceiptTemplate(template);
@@ -293,7 +301,7 @@ const sendLineViaApi = async (
   template?: ReceiptTemplateSettings
 ): Promise<ReceiptDispatchOutcome> => {
   const provider = "LINE_OA";
-  const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
+  const accessToken = getSetting("lineChannelAccessToken") || process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
   const apiBase = (process.env.LINE_API_BASE ?? "https://api.line.me").trim();
   const activeTemplate = resolveReceiptTemplate(template);
 

@@ -5,6 +5,7 @@ dist
 .vite
 .env
 .env.local
+docker-compose.prod.yml
 coverage
 *.log
 *.tsbuildinfo

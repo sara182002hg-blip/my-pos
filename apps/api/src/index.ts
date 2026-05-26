@@ -16,6 +16,7 @@ import { registerOperationRoutes } from "./routes/operations";
 import { registerOverviewRoutes } from "./routes/overview";
 import { registerPublicRoutes } from "./routes/public";
 import { registerSecurityRoutes } from "./routes/security";
+import { registerSettingsRoutes } from "./routes/settings";
 import { registerStaffRoutes } from "./routes/staff";
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -99,6 +100,7 @@ await registerMenuRoutes(app);
 await registerOperationRoutes(app);
 await registerPublicRoutes(app);
 await registerSecurityRoutes(app);
+await registerSettingsRoutes(app);
 await registerStaffRoutes(app);
 
 app.get("/ws/live", { websocket: true }, (socket, request) => {

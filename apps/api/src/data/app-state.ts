@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from "fastify";
 import { MemoryAppRepository } from "./memory-repository";
 import { PrismaPersistenceAdapter } from "./prisma-persistence";
 import { connectPrismaClient, loadStateFromPrisma } from "./prisma-bootstrap";
+import { settingsStore } from "../lib/settings-store";
 
 export const appRepository = new MemoryAppRepository();
 
@@ -15,6 +16,7 @@ export const initializeAppState = async (logger?: FastifyBaseLogger) => {
     return;
   }
 
+  settingsStore.setPrisma(prisma);
   appRepository.setPersistenceAdapter(new PrismaPersistenceAdapter(prisma));
   const prismaState = await loadStateFromPrisma(prisma);
 

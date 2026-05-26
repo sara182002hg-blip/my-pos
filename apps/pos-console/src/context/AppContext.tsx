@@ -86,7 +86,8 @@ export const modules = [
   "Delivery Center",
   "Backoffice",
   "HR",
-  "Security"
+  "Security",
+  "Settings"
 ];
 
 export const statusTone: Record<string, string> = {

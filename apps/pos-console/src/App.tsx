@@ -7,6 +7,7 @@ import { DeliveryPanel } from "./panels/DeliveryPanel";
 import { BackofficePanel } from "./panels/BackofficePanel";
 import { HRPanel } from "./panels/HRPanel";
 import { SecurityPanel } from "./panels/SecurityPanel";
+import { SettingsPanel } from "./panels/SettingsPanel";
 
 export default function App() {
   return (
@@ -135,6 +136,7 @@ function AppShell() {
         {activeTab === "Backoffice" && <BackofficePanel />}
         {activeTab === "HR" && <HRPanel />}
         {activeTab === "Security" && <SecurityPanel />}
+        {activeTab === "Settings" && <SettingsPanel />}
       </section>
     </main>
   );
